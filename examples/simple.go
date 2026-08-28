@@ -10,8 +10,16 @@ import (
 
 func main() {
 	s := aio.NewServer(
+		"simple-api", "1.0.0",
+		aio.WithOpenAPIOptions(
+			aio.WithOpenAPIDescription("desc"),
+		),
+		aio.WithGlobalEndpointOptions(
+			aio.WithMiddleware(),
+		),
 		aio.WithEndpoint(
 			http.MethodPost, "/test", handleTest,
+			
 		),
 		aio.WithEndpoint(
 			http.MethodGet, "/ping", func(ctx context.Context, _ any) (string, error) {
@@ -20,7 +28,7 @@ func main() {
 		),
 	)
 
-	err := s.Run("localhost:8080")
+	err := s.Run(":8080")
 	if err != nil {
 		log.Panicf("s.Run: %v", err)
 	}

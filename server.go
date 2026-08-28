@@ -9,15 +9,16 @@ import (
 	"github.com/Piggey/binder"
 )
 
-type Server struct{
+type Server struct {
 	binder *binder.Binder
-	mux *http.ServeMux
+	mux    *http.ServeMux
+	oapi   openapi
 }
 
-func NewServer(serverOpts ...serverOpt) *Server {
+func NewServer(title, version string, serverOpts ...serverOpt) *Server {
 	s := &Server{
 		binder: binder.New(),
-		mux: http.NewServeMux(),
+		mux:    http.NewServeMux(),
 	}
 
 	for _, serverOpt := range serverOpts {
@@ -33,7 +34,9 @@ func (s *Server) Run(addr string) error {
 
 type serverOpt func(s *Server)
 
-func WithEndpoint[In any, Out any](method, path string, handler func(context.Context, In) (Out, error)) serverOpt {
+type HandlerFunc[In, Out any] func(context.Context, In) (Out, error)
+
+func WithEndpoint[In any, Out any](method, path string, handlerFunc HandlerFunc[In, Out]) serverOpt {
 	return func(s *Server) {
 		pattern := fmt.Sprint(method, " ", path)
 		s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
@@ -41,10 +44,10 @@ func WithEndpoint[In any, Out any](method, path string, handler func(context.Con
 			err := s.binder.Bind(r, &in)
 			if err != nil {
 				w.Write([]byte(err.Error()))
-				return 
+				return
 			}
 
-			out, err := handler(r.Context(), in)
+			out, err := handlerFunc(r.Context(), in)
 			if err != nil {
 				w.Write([]byte(err.Error()))
 				return
@@ -56,5 +59,21 @@ func WithEndpoint[In any, Out any](method, path string, handler func(context.Con
 				return
 			}
 		})
+	}
+}
+
+type oapiOpt func(oapi *openapi)
+
+func WithOpenAPIOptions(oapiOpts ...oapiOpt) serverOpt {
+	return func(s *Server) {
+		for _, oapiOpt := range oapiOpts {
+			oapiOpt(&s.oapi)
+		}
+	}
+}
+
+func WithOpenAPIDescription(desc string) oapiOpt {
+	return func(oapi *openapi) {
+		oapi.Info.Description = desc
 	}
 }
