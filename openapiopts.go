@@ -4,6 +4,12 @@ import "github.com/Piggey/aio/internal/openapi"
 
 type openapiOpt func(oapi *openapi.OpenAPI)
 
+func WithOpenAPIVersion(version string) openapiOpt {
+	return func(oapi *openapi.OpenAPI) {
+		oapi.Info.Version = version
+	}
+}
+
 func WithOpenAPIDescription(desc string) openapiOpt {
 	return func(oapi *openapi.OpenAPI) {
 		oapi.Info.Description = desc

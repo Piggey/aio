@@ -1,7 +1,9 @@
 package aio
 
-type group struct {
-	tag          string
-	endpointOpts []endpointOpt
-	endpoints    []endpoint
+import "net/http"
+
+type Group struct {
+	path        string
+	middlewares []http.Handler
+	endpoints   []endpoint
 }
