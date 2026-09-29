@@ -14,12 +14,15 @@ func main() {
 		aio.WithOpenAPIOptions(
 			aio.WithOpenAPIDescription("desc"),
 		),
-		aio.WithGlobalEndpointOptions(
-			aio.WithMiddleware(),
-		),
+		aio.WithGlobalEndpointOptions(),
 		aio.WithEndpoint(
 			http.MethodPost, "/test", handleTest,
-			
+		),
+		aio.WithGroup(
+			"/v1",
+			aio.WithGroupEndpointOptions(),
+			aio.WithGroupEndpoints(
+			),
 		),
 		aio.WithEndpoint(
 			http.MethodGet, "/ping", func(ctx context.Context, _ any) (string, error) {

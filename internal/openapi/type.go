@@ -1,4 +1,4 @@
-package aio
+package openapi
 
 type DataType string
 
