@@ -1,5 +1,3 @@
-github.com/Piggey/binder v0.0.0-20260330194320-de513cdb7293 h1:xxItIQgeyOxom4wG8RvGY/G7xt1myUlFyKm9GOM5swU=
-github.com/Piggey/binder v0.0.0-20260330194320-de513cdb7293/go.mod h1:v+G/caP8MqjV/OEXbiwPZAnUdJJth2FRimPvrCLSDag=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gabriel-vasile/mimetype v1.4.13 h1:46nXokslUBsAJE/wMsp5gtO500a4F3Nkz9Ufpk2AcUM=

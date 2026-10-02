@@ -10,18 +10,16 @@ import (
 
 func main() {
 	app := aio.New(
-		"my cool api",
-		aio.WithOpenAPIOptions(
-			aio.WithOpenAPIVersion("1.0.0"),
-		),
+		"my cool api", "v1.0.0",
+		aio.WithOpenAPIOptions(),
 		aio.WithCustomValidator(validator.New()),
 	)
 
 	app.Get("/test", func(ctx context.Context, _ any) (string, error) {
-		return "test", nil
+		return "test", aio.ErrBadRequest
 	})
 
-	err := app.ListenAndServe(":3000")
+	err := app.Run(":3000")
 	if err != nil {
 		log.Panicf("app.ListenAndServe: %v", err)
 	}

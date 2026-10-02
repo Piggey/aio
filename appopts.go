@@ -1,7 +1,7 @@
 package aio
 
 import (
-	"github.com/Piggey/binder"
+	"github.com/Piggey/aio/internal/binder"
 	"github.com/go-playground/validator/v10"
 )
 
