@@ -3,6 +3,8 @@ package aio
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"reflect"
 
@@ -11,18 +13,16 @@ import (
 )
 
 type App struct {
-	mux    *http.ServeMux
 	binder *binder.Binder
 	oapi   oapi
 
-	middlewares []http.Handler
+	middlewares []func(http.Handler) http.Handler
 	endpoints   []endpoint
 	groups      []Group
 }
 
 func New(name string, version string, appOpts ...appOpt) *App {
 	app := App{
-		mux:    http.NewServeMux(),
 		binder: nil,
 		oapi: oapi{
 			isEnabled:   true,
@@ -59,24 +59,25 @@ func (app *App) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) 
 		}
 	}
 
-	_ = app.binder.BindOut(w, r, pd)
+	_ = app.binder.BindOut(w, r, pd.Status, pd)
 }
 
-func (app *App) Use(middleware http.Handler) {
+func (app *App) Use(middleware func(http.Handler) http.Handler) {
 	app.middlewares = append(app.middlewares, middleware)
 }
 
 func (app *App) Group(path string) *Group {
-	group := Group{
+	g := Group{
+		app:         app,
+		parent:      nil,
 		path:        path,
-		middlewares: []http.Handler{},
-		endpoints:   []endpoint{},
+		middlewares: []func(http.Handler) http.Handler{},
 	}
 
-	copy(group.middlewares, app.middlewares)
-	app.groups = append(app.groups, group)
+	copy(g.middlewares, app.middlewares)
+	app.groups = append(app.groups, g)
 
-	return &group
+	return &g
 }
 
 func (app *App) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
@@ -116,15 +117,31 @@ func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context
 }
 
 func (app *App) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error)) {
-	endpoint := endpoint{
-		method:      method,
-		path:        path,
-		middlewares: []http.Handler{},
-		handler:     app.wrapHandlerFunc(handlerFunc),
+	app.addEndpoint(method, path, app.wrapHandlerFunc(handlerFunc), app.middlewares)
+}
+
+func (app *App) Run(addr string) error {
+	return http.ListenAndServe(addr, app.intoMux())
+}
+
+func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
+	return http.ListenAndServeTLS(addr, certFile, keyFile, app.intoMux())
+}
+
+func (app *App) addEndpoint(method string, path string, handler http.Handler, middlewares []func(http.Handler) http.Handler) {
+	for _, middleware := range middlewares {
+		handler = middleware(handler)
 	}
 
-	copy(endpoint.middlewares, app.middlewares)
-	app.endpoints = append(app.endpoints, endpoint)
+	pattern := fmt.Sprintf("%s %s", method, path)
+
+	ep := endpoint{
+		pattern: pattern,
+		handler: handler,
+	}
+
+	app.endpoints = append(app.endpoints, ep)
+	slog.Debug("registered endpoint", slog.String("pattern", pattern))
 }
 
 func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, In) (Out, error)) http.Handler {
@@ -146,7 +163,7 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 			return
 		}
 
-		err = app.binder.BindOut(w, r, out)
+		err = app.binder.BindOut(w, r, http.StatusOK, out)
 		if err != nil {
 			app.ErrorHandler(w, r, ErrInternalServerError)
 			return
@@ -154,10 +171,11 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 	})
 }
 
-func (app *App) Run(addr string) error {
-	return http.ListenAndServe(addr, app.mux)
-}
+func (app *App) intoMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	for _, ep := range app.endpoints {
+		mux.Handle(ep.pattern, ep.handler)
+	}
 
-func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
-	return http.ListenAndServeTLS(addr, certFile, keyFile, app.mux)
+	return mux
 }

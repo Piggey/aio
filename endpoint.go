@@ -5,8 +5,7 @@ import (
 )
 
 type endpoint struct {
-	method      string
-	path        string
-	middlewares []http.Handler
-	handler     http.Handler
+	pattern string
+	handler http.Handler
 }
+
