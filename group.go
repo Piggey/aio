@@ -68,5 +68,5 @@ func (g *Group) Query[In, Out any](path string, handlerFunc func(context.Context
 }
 
 func (g *Group) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error)) {
-	g.app.addEndpoint(method, pathpkg.Join(g.path, path), g.app.wrapHandlerFunc(handlerFunc), g.middlewares)
+	g.app.addEndpoint(method, pathpkg.Join(g.path, path), handlerFunc, g.middlewares)
 }

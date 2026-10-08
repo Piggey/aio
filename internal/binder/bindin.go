@@ -61,18 +61,11 @@ func bindBody(mimetype string, data []byte, obj any) error {
 	}
 }
 
-const (
-	tagHeader = "header"
-	tagQuery  = "query"
-	tagPath   = "path"
-	tagCookie = "cookie"
-)
-
 func bindReflect(r *http.Request, obj any) error {
 	if obj == nil {
 		return fmt.Errorf("obj must be a non-nil pointer to a struct")
 	}
-	
+
 	v := reflect.ValueOf(obj)
 	if v.IsNil() || v.Kind() != reflect.Pointer || v.Elem().Kind() != reflect.Struct {
 		return fmt.Errorf("obj must be a non-nil pointer to a struct")

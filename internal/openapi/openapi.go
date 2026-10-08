@@ -118,13 +118,19 @@ type (
 		// map
 		AdditionalProperties *SchemaSimpleOrRef `json:"additionalProperties,omitempty"`
 
-		Minimum   float64 `json:"minimum,omitempty"`
-		Maximum   float64 `json:"maximum,omitempty"`
-		MinLength int     `json:"minLength,omitempty"`
-		MaxLength int     `json:"maxLength,omitempty"`
-		MinItems  int     `json:"minItems,omitempty"`
-		MaxItems  int     `json:"maxItems,omitempty"`
-		Nullable  bool    `json:"nullable,omitempty"`
+		// number
+		Minimum float64 `json:"minimum,omitempty"`
+		Maximum float64 `json:"maximum,omitempty"`
+
+		// string
+		MinLength int `json:"minLength,omitempty"`
+		MaxLength int `json:"maxLength,omitempty"`
+
+		// array
+		MinItems int `json:"minItems,omitempty"`
+		MaxItems int `json:"maxItems,omitempty"`
+
+		Nullable bool `json:"nullable,omitempty"`
 	}
 
 	Server struct {

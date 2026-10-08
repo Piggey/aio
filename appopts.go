@@ -7,7 +7,7 @@ import (
 
 type appOpt func(app *App)
 
-func WithOpenAPIOptions(openapiOpts ...openapiOpt) appOpt {
+func WithOpenAPIOptions(openapiOpts ...oapiOpt) appOpt {
 	return func(app *App) {
 		for _, openapiOpt := range openapiOpts {
 			openapiOpt(&app.oapi)

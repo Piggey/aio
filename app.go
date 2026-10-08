@@ -117,7 +117,7 @@ func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context
 }
 
 func (app *App) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.addEndpoint(method, path, app.wrapHandlerFunc(handlerFunc), app.middlewares)
+	app.addEndpoint(method, path, handlerFunc, app.middlewares)
 }
 
 func (app *App) Run(addr string) error {
@@ -128,27 +128,25 @@ func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
 	return http.ListenAndServeTLS(addr, certFile, keyFile, app.intoMux())
 }
 
-func (app *App) addEndpoint(method string, path string, handler http.Handler, middlewares []func(http.Handler) http.Handler) {
+func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []func(http.Handler) http.Handler) {
+	handler := app.wrapHandlerFunc(handlerFunc)
 	for _, middleware := range middlewares {
 		handler = middleware(handler)
 	}
 
-	pattern := fmt.Sprintf("%s %s", method, path)
-
 	ep := endpoint{
-		pattern: pattern,
+		method:  method,
+		path:    path,
 		handler: handler,
+		inType:  reflect.TypeFor[In](),
+		outType: reflect.TypeFor[Out](),
 	}
 
 	app.endpoints = append(app.endpoints, ep)
-	slog.Debug("registered endpoint", slog.String("pattern", pattern))
+	slog.Debug("registered endpoint", slog.String("method", method), slog.String("path", path))
 }
 
 func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, In) (Out, error)) http.Handler {
-	if app.oapi.isEnabled {
-		app.oapi.schemaTypes = append(app.oapi.schemaTypes, reflect.TypeFor[In](), reflect.TypeFor[Out]())
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in In
 		err := app.binder.BindIn(r, &in)
@@ -174,7 +172,8 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 func (app *App) intoMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	for _, ep := range app.endpoints {
-		mux.Handle(ep.pattern, ep.handler)
+		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
+		mux.Handle(pattern, ep.handler)
 	}
 
 	return mux
