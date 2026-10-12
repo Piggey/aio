@@ -9,7 +9,6 @@ import (
 	"reflect"
 
 	"github.com/Piggey/aio/internal/binder"
-	"github.com/Piggey/aio/internal/openapi"
 )
 
 type App struct {
@@ -23,19 +22,7 @@ type App struct {
 
 func New(name string, version string, appOpts ...appOpt) *App {
 	app := App{
-		binder: nil,
-		oapi: oapi{
-			isEnabled:   true,
-			uiPath:      "/swagger/ui",
-			openAPIPath: "/swagger/json",
-			openAPI: openapi.OpenAPI{
-				OpenAPI: openapi.OpenAPIVersion,
-				Info: openapi.Info{
-					Title:   name,
-					Version: version,
-				},
-			},
-		},
+		oapi: defaultOAPI(name, version),
 	}
 
 	for _, appOpt := range appOpts {
@@ -134,12 +121,22 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		handler = middleware(handler)
 	}
 
+	inType := reflect.TypeFor[In]()
+	if inType.Kind() != reflect.Struct {
+		panic("aio: In type has to be a struct")
+	}
+
+	outType := reflect.TypeFor[Out]()
+	if outType.Kind() != reflect.Struct {
+		panic("aio: Out type has to be a struct")
+	}
+
 	ep := endpoint{
 		method:  method,
 		path:    path,
 		handler: handler,
-		inType:  reflect.TypeFor[In](),
-		outType: reflect.TypeFor[Out](),
+		inType:  inType,
+		outType: outType,
 	}
 
 	app.endpoints = append(app.endpoints, ep)
@@ -174,6 +171,10 @@ func (app *App) intoMux() *http.ServeMux {
 	for _, ep := range app.endpoints {
 		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
 		mux.Handle(pattern, ep.handler)
+
+		if app.oapi.isEnabled {
+			app.oapi.addEndpoint(ep)
+		}
 	}
 
 	return mux

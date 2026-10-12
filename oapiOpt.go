@@ -4,6 +4,24 @@ import "github.com/Piggey/aio/internal/openapi"
 
 type oapiOpt func(oapi *oapi)
 
+func WithoutOpenAPI() oapiOpt {
+	return func(oapi *oapi) {
+		oapi.isEnabled = false
+	}
+}
+
+func WithCustomUIPath(uiPath string) oapiOpt {
+	return func(oapi *oapi) {
+		oapi.uiPath = uiPath
+	}
+}
+
+func WithCustomOpenAPIPath(openAPIPath string) oapiOpt {
+	return func(oapi *oapi) {
+		oapi.openAPIPath = openAPIPath
+	}
+}
+
 func WithOpenAPIDescription(desc string) oapiOpt {
 	return func(oapi *oapi) {
 		oapi.openAPI.Info.Description = desc

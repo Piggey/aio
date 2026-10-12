@@ -9,6 +9,13 @@ type endpoint struct {
 	method  string
 	path    string
 	handler http.Handler
-	inType  reflect.Type
-	outType reflect.Type
+
+	// openAPI
+	summary          string
+	description      string
+	tags             []string
+	inType           reflect.Type
+	outType          reflect.Type
+	errorStatusCodes []int
+	deprecated       bool
 }

@@ -45,17 +45,19 @@ type (
 	}
 
 	PathItem struct {
-		Summary     string     `json:"summary,omitempty"`
-		Description string     `json:"description,omitempty"`
-		Get         *Operation `json:"get,omitempty"`
-		Put         *Operation `json:"put,omitempty"`
-		Post        *Operation `json:"post,omitempty"`
-		Delete      *Operation `json:"delete,omitempty"`
-		Options     *Operation `json:"options,omitempty"`
-		Head        *Operation `json:"head,omitempty"`
-		Patch       *Operation `json:"patch,omitempty"`
-		Trace       *Operation `json:"trace,omitempty"`
-		Query       *Operation `json:"query,omitempty"`
+		Summary              string               `json:"summary,omitempty"`
+		Description          string               `json:"description,omitempty"`
+		Parameters           []Param              `json:"parameters"`
+		Get                  *Operation           `json:"get,omitempty"`
+		Put                  *Operation           `json:"put,omitempty"`
+		Post                 *Operation           `json:"post,omitempty"`
+		Delete               *Operation           `json:"delete,omitempty"`
+		Options              *Operation           `json:"options,omitempty"`
+		Head                 *Operation           `json:"head,omitempty"`
+		Patch                *Operation           `json:"patch,omitempty"`
+		Trace                *Operation           `json:"trace,omitempty"`
+		Query                *Operation           `json:"query,omitempty"`
+		AdditionalOperations map[string]Operation `json:"additionalOperations,omitempty"`
 	}
 
 	Operation struct {

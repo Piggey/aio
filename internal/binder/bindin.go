@@ -81,28 +81,28 @@ func bindReflect(r *http.Request, obj any) error {
 			continue // skip private fields
 		}
 
-		if tag := ft.Tag.Get(tagHeader); tag != "" {
+		if tag := ft.Tag.Get(TagHeader); tag != "" {
 			err := setFieldSlice(fv, r.Header.Values(tag))
 			if err != nil {
 				return fmt.Errorf("header: %s: %w", tag, err)
 			}
 		}
 
-		if tag := ft.Tag.Get(tagQuery); tag != "" {
+		if tag := ft.Tag.Get(TagQuery); tag != "" {
 			err := setFieldSlice(fv, r.URL.Query()[tag])
 			if err != nil {
 				return fmt.Errorf("query: %s: %w", tag, err)
 			}
 		}
 
-		if tag := ft.Tag.Get(tagPath); tag != "" {
+		if tag := ft.Tag.Get(TagPath); tag != "" {
 			err := setField(fv, r.PathValue(tag))
 			if err != nil {
 				return fmt.Errorf("path: %s: %w", tag, err)
 			}
 		}
 
-		if tag := ft.Tag.Get(tagCookie); tag != "" {
+		if tag := ft.Tag.Get(TagCookie); tag != "" {
 			cookie, err := r.Cookie(tag)
 			if err != nil {
 				return fmt.Errorf("r.Cookie: %w", err)

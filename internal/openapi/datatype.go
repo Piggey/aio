@@ -8,4 +8,5 @@ const (
 	DataTypeString  DataType = "string"
 	DataTypeBoolean DataType = "boolean"
 	DataTypeObject  DataType = "object"
+	DataTypeArray   DataType = "array"
 )

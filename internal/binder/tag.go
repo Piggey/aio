@@ -1,8 +1,8 @@
 package binder
 
 const (
-	tagHeader = "header"
-	tagQuery  = "query"
-	tagPath   = "path"
-	tagCookie = "cookie"
+	TagHeader = "header"
+	TagQuery  = "query"
+	TagPath   = "path"
+	TagCookie = "cookie"
 )
