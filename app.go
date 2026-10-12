@@ -177,5 +177,10 @@ func (app *App) intoMux() *http.ServeMux {
 		}
 	}
 
+	if app.oapi.isEnabled {
+		mux.Handle(fmt.Sprintf("%s %s", http.MethodGet, app.oapi.schemaPath), app.oapi.schemaHandler())
+		mux.Handle(fmt.Sprintf("%s %s", http.MethodGet, app.oapi.uiPath), app.oapi.uiHandler())
+	}
+
 	return mux
 }

@@ -20,9 +20,9 @@ func main() {
 		aio.WithCustomValidator(validator.New()),
 	)
 
-	app.Get("/test", func(ctx context.Context, _ struct{}) (string, error) {
+	app.Get("/test", func(ctx context.Context, _ struct{}) (struct{}, error) {
 		log.Println("test")
-		return "test", nil
+		return struct{}{}, nil
 	})
 
 	app.Post("/test", func(ctx context.Context, req TestRequest) (TestResponse, error) {
@@ -45,9 +45,9 @@ func main() {
 		})
 	})
 
-	kutas.Get("/huj", func(ctx context.Context, _ struct{}) (string, error) {
+	kutas.Get("/huj", func(ctx context.Context, _ struct{}) (struct{}, error) {
 		log.Println("huj")
-		return "", aio.ErrBadRequest
+		return struct{}{}, aio.ErrBadRequest
 	})
 
 	err := app.Run(":8080")

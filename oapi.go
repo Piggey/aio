@@ -2,7 +2,9 @@ package aio
 
 import (
 	"encoding"
+	"encoding/json"
 	"fmt"
+	"html"
 	"math/rand/v2"
 	"net/http"
 	"reflect"
@@ -14,17 +16,17 @@ import (
 )
 
 type oapi struct {
-	isEnabled   bool
-	uiPath      string
-	openAPIPath string
-	openAPI     openapi.OpenAPI
+	isEnabled  bool
+	uiPath     string
+	schemaPath string
+	openAPI    openapi.OpenAPI
 }
 
 func defaultOAPI(name string, version string) oapi {
 	return oapi{
-		isEnabled:   true,
-		uiPath:      "/openapi/ui",
-		openAPIPath: "/openapi/json",
+		isEnabled:  true,
+		uiPath:     "/openapi/ui",
+		schemaPath: "/openapi/json",
 		openAPI: openapi.OpenAPI{
 			OpenAPI: openapi.OpenAPIVersion,
 			Info: openapi.Info{
@@ -33,6 +35,41 @@ func defaultOAPI(name string, version string) oapi {
 			},
 		},
 	}
+}
+
+// schemaHandler serves the OpenAPI document. It has to be created after all the endpoints are added.
+func (o *oapi) schemaHandler() http.Handler {
+	schema, err := json.Marshal(o.openAPI)
+	if err != nil {
+		panic(fmt.Sprintf("aio: json.Marshal openapi schema: %v", err))
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(schema)
+	})
+}
+
+// uiHandler serves the Scalar API reference UI pointing at schemaPath.
+func (o *oapi) uiHandler() http.Handler {
+	page := fmt.Sprintf(`<!doctype html>
+<html>
+<head>
+	<title>%s | Scalar</title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+	<div id="app"></div>
+	<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+	<script>Scalar.createApiReference('#app', { url: %q })</script>
+</body>
+</html>`, html.EscapeString(o.openAPI.Info.Title), o.schemaPath)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(page))
+	})
 }
 
 func (o *oapi) addEndpoint(ep endpoint) {
@@ -48,14 +85,13 @@ func (o *oapi) addEndpoint(ep endpoint) {
 		Summary:     ep.summary,
 		Description: ep.description,
 		Tags:        ep.tags,
+		Parameters:  inParameters,
 		RequestBody: inRequestBody,
 		Responses:   outResponses,
 		Deprecated:  ep.deprecated,
 	}
 
-	pathItem := openapi.PathItem{
-		Parameters: inParameters,
-	}
+	pathItem := o.openAPI.Paths[ep.path] // other methods may already be registered under the same path
 
 	switch ep.method {
 	case http.MethodGet:
@@ -77,6 +113,9 @@ func (o *oapi) addEndpoint(ep endpoint) {
 	case "QUERY":
 		pathItem.Query = &operation
 	default:
+		if pathItem.AdditionalOperations == nil {
+			pathItem.AdditionalOperations = map[string]openapi.Operation{}
+		}
 		pathItem.AdditionalOperations[ep.method] = operation
 	}
 
@@ -84,7 +123,39 @@ func (o *oapi) addEndpoint(ep endpoint) {
 }
 
 func (o *oapi) parseOutType(outType reflect.Type, errorStatusCodes []int) map[int]openapi.Response {
-	panic("impl")
+	responses := map[int]openapi.Response{
+		http.StatusOK: o.newResponse(http.StatusOK, outType),
+	}
+
+	problemDetailsType := reflect.TypeFor[ProblemDetails]()
+	for _, statusCode := range errorStatusCodes {
+		responses[statusCode] = o.newResponse(statusCode, problemDetailsType)
+	}
+
+	return responses
+}
+
+// newResponse describes a response body the way binder.BindOut writes it:
+// json by default, xml if requested with the Accept header.
+func (o *oapi) newResponse(statusCode int, t reflect.Type) openapi.Response {
+	response := openapi.Response{
+		Description: http.StatusText(statusCode),
+	}
+
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	if t.Kind() == reflect.Struct && t.NumField() == 0 {
+		return response // struct{} - nothing worth describing
+	}
+
+	response.Content = map[string]openapi.MediaType{
+		"application/json": {Schema: o.schemaFor(t, "json")},
+		"application/xml":  {Schema: o.schemaFor(t, "xml")},
+	}
+
+	return response
 }
 
 func (o *oapi) parseInType(inType reflect.Type) (parameters []openapi.Param, reqBody *openapi.RequestBody) {
@@ -169,8 +240,6 @@ func (o *oapi) newParam(field reflect.StructField, name string, location openapi
 	}
 }
 
-// structSchemaFor registers a component schema built from the fields of a struct
-// tagged with bodyTag (`json` or `xml`) and returns a reference to it.
 func (o *oapi) structSchemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrRef {
 	name := o.schemaName(t, bodyTag)
 	ref := openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/" + name}
@@ -212,7 +281,29 @@ func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrR
 		nullable = true
 	}
 
-	schema := openapi.SchemaSimpleOrRef{Nullable: nullable}
+	// user defined overrides are called on a pointer to zero value,
+	// since its method set includes value receiver methods too
+	zero := reflect.New(t).Interface()
+	formatter, hasFormat := zero.(OpenAPIFormatter)
+
+	var schema openapi.SchemaSimpleOrRef
+	if typer, ok := zero.(OpenAPITyper); ok {
+		schema.Type = openapi.DataType(typer.OpenAPIType())
+	} else {
+		schema = o.baseSchemaFor(t, bodyTag)
+	}
+
+	if hasFormat && schema.Ref == "" {
+		schema.Format = openapi.DataFormat(formatter.OpenAPIFormat())
+	}
+
+	schema.Nullable = nullable
+	return schema
+}
+
+// baseSchemaFor builds a schema for a non-pointer type, without user defined overrides.
+func (o *oapi) baseSchemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrRef {
+	schema := openapi.SchemaSimpleOrRef{}
 
 	switch t {
 	case reflect.TypeFor[time.Time]():
@@ -222,6 +313,25 @@ func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrR
 	case reflect.TypeFor[[]byte]():
 		schema.Type = openapi.DataTypeString
 		schema.Format = openapi.DataFormatByte
+		return schema
+	}
+
+	// popular third party types, recognized by name to avoid importing them
+	switch t.PkgPath() + "." + t.Name() {
+	case "github.com/google/uuid.UUID",
+		"github.com/gofrs/uuid.UUID",
+		"github.com/gofrs/uuid/v5.UUID",
+		"github.com/satori/go.uuid.UUID":
+		schema.Type = openapi.DataTypeString
+		schema.Format = openapi.DataFormatUUID
+		return schema
+	case "cloud.google.com/go/civil.Date":
+		schema.Type = openapi.DataTypeString
+		schema.Format = openapi.DataFormatDate
+		return schema
+	case "github.com/shopspring/decimal.Decimal":
+		schema.Type = openapi.DataTypeString
+		schema.Format = openapi.DataFormatDecimal
 		return schema
 	}
 
@@ -256,9 +366,7 @@ func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrR
 		schema.Type = openapi.DataTypeObject
 		schema.AdditionalProperties = &values
 	case reflect.Struct:
-		ref := o.structSchemaFor(t, bodyTag)
-		ref.Nullable = nullable
-		return ref
+		return o.structSchemaFor(t, bodyTag)
 	default:
 		// interfaces, funcs, channels etc. can't be described, leave the schema empty (any type)
 	}
@@ -271,8 +379,18 @@ func (o *oapi) schemaName(t reflect.Type, bodyTag string) string {
 		o.openAPI.Components.Schemas = map[string]openapi.Schema{}
 	}
 
-	name := t.Name()
-	if name == "" {
+	// package qualified name, e.g. civil.Date. Generic types (e.g. pkg.Page[github.com/x/y.User])
+	// contain characters not allowed in component names, so they are replaced with `_`
+	name := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
+			return r
+		default:
+			return '_'
+		}
+	}, t.String())
+
+	if t.Name() == "" {
 		name = fmt.Sprintf("Anonymous%08x", rand.Uint32())
 	}
 
@@ -289,8 +407,12 @@ func bodyFieldName(field reflect.StructField, bodyTag string) (string, bool) {
 	}
 
 	value := field.Tag.Get(bodyTag)
-	if value == "" || value == "-" {
+	if value == "-" {
 		return "", false
+	}
+
+	if value == "" && hasParamTag(field) {
+		return "", false // endpoint parameter, not a part of the body
 	}
 
 	name, _, _ := strings.Cut(value, ",")
@@ -299,6 +421,13 @@ func bodyFieldName(field reflect.StructField, bodyTag string) (string, bool) {
 	}
 
 	return name, true
+}
+
+func hasParamTag(field reflect.StructField) bool {
+	return field.Tag.Get(binder.TagHeader) != "" ||
+		field.Tag.Get(binder.TagQuery) != "" ||
+		field.Tag.Get(binder.TagPath) != "" ||
+		field.Tag.Get(binder.TagCookie) != ""
 }
 
 func isRequired(field reflect.StructField) bool {

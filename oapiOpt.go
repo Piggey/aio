@@ -18,7 +18,7 @@ func WithCustomUIPath(uiPath string) oapiOpt {
 
 func WithCustomOpenAPIPath(openAPIPath string) oapiOpt {
 	return func(oapi *oapi) {
-		oapi.openAPIPath = openAPIPath
+		oapi.schemaPath = openAPIPath
 	}
 }
 

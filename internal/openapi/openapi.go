@@ -47,7 +47,7 @@ type (
 	PathItem struct {
 		Summary              string               `json:"summary,omitempty"`
 		Description          string               `json:"description,omitempty"`
-		Parameters           []Param              `json:"parameters"`
+		Parameters           []Param              `json:"parameters,omitempty"`
 		Get                  *Operation           `json:"get,omitempty"`
 		Put                  *Operation           `json:"put,omitempty"`
 		Post                 *Operation           `json:"post,omitempty"`
@@ -65,6 +65,7 @@ type (
 		Summary     string           `json:"summary,omitempty"`
 		Description string           `json:"description,omitempty"`
 		Tags        []string         `json:"tags,omitempty"`
+		Parameters  []Param          `json:"parameters,omitempty"`
 		RequestBody *RequestBody     `json:"requestBody,omitempty"`
 		Responses   map[int]Response `json:"responses,omitempty"`
 		Deprecated  bool             `json:"deprecated,omitempty"`
