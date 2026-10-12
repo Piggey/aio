@@ -33,6 +33,10 @@ func defaultOAPI(name string, version string) oapi {
 				Title:   name,
 				Version: version,
 			},
+			Paths: map[string]openapi.PathItem{},
+			Components: openapi.Components{
+				Schemas: map[string]openapi.Schema{},
+			},
 		},
 	}
 }
@@ -73,27 +77,28 @@ func (o *oapi) uiHandler() http.Handler {
 }
 
 func (o *oapi) addEndpoint(ep endpoint) {
-	if o.openAPI.Paths == nil {
-		o.openAPI.Paths = map[string]openapi.PathItem{}
-	}
+	pathItem := o.openAPI.Paths[ep.path] // other methods may already be registered under the same path
+	setOperation(&pathItem, ep.method, o.newOperation(ep))
+	o.openAPI.Paths[ep.path] = pathItem
+}
 
-	inParameters, inRequestBody := o.parseInType(ep.inType)
-	outResponses := o.parseOutType(ep.outType, ep.errorStatusCodes)
+func (o *oapi) newOperation(ep endpoint) openapi.Operation {
+	parameters, requestBody := o.parseInType(ep.inType)
 
-	operation := openapi.Operation{
+	return openapi.Operation{
 		OperationID: newOperationID(ep.method, ep.path),
 		Summary:     ep.summary,
 		Description: ep.description,
 		Tags:        ep.tags,
-		Parameters:  inParameters,
-		RequestBody: inRequestBody,
-		Responses:   outResponses,
+		Parameters:  parameters,
+		RequestBody: requestBody,
+		Responses:   o.parseOutType(ep.outType, ep.errorStatusCodes),
 		Deprecated:  ep.deprecated,
 	}
+}
 
-	pathItem := o.openAPI.Paths[ep.path] // other methods may already be registered under the same path
-
-	switch ep.method {
+func setOperation(pathItem *openapi.PathItem, method string, operation openapi.Operation) {
+	switch method {
 	case http.MethodGet:
 		pathItem.Get = &operation
 	case http.MethodPut:
@@ -116,10 +121,12 @@ func (o *oapi) addEndpoint(ep endpoint) {
 		if pathItem.AdditionalOperations == nil {
 			pathItem.AdditionalOperations = map[string]openapi.Operation{}
 		}
-		pathItem.AdditionalOperations[ep.method] = operation
+		pathItem.AdditionalOperations[method] = operation
 	}
+}
 
-	o.openAPI.Paths[ep.path] = pathItem
+func newOperationID(method, path string) string {
+	return fmt.Sprintf("%s %s", method, path)
 }
 
 func (o *oapi) parseOutType(outType reflect.Type, errorStatusCodes []int) map[int]openapi.Response {
@@ -142,11 +149,8 @@ func (o *oapi) newResponse(statusCode int, t reflect.Type) openapi.Response {
 		Description: http.StatusText(statusCode),
 	}
 
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-
-	if t.Kind() == reflect.Struct && t.NumField() == 0 {
+	t, _ = derefType(t)
+	if isEmptyStruct(t) {
 		return response // struct{} - nothing worth describing
 	}
 
@@ -163,70 +167,49 @@ func (o *oapi) parseInType(inType reflect.Type) (parameters []openapi.Param, req
 		return nil, nil
 	}
 
-	for inType.Kind() == reflect.Pointer {
-		return o.parseInType(inType.Elem())
-	}
-
+	inType, _ = derefType(inType)
 	if inType.Kind() != reflect.Struct {
 		return nil, nil
 	}
 
-	var hasJSONBody, hasXMLBody, bodyRequired bool
+	return o.parseParams(inType), o.parseRequestBody(inType)
+}
 
-	for field := range inType.Fields() {
+func (o *oapi) parseParams(t reflect.Type) []openapi.Param {
+	var parameters []openapi.Param
+
+	for field := range t.Fields() {
 		if !field.IsExported() {
 			continue // skip private fields
 		}
 
-		if name := field.Tag.Get(binder.TagHeader); name != "" {
-			parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationHeader))
-		}
-
-		if name := field.Tag.Get(binder.TagQuery); name != "" {
-			parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationQuery))
-		}
-
-		if name := field.Tag.Get(binder.TagPath); name != "" {
-			parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationPath))
-		}
-
-		if name := field.Tag.Get(binder.TagCookie); name != "" {
-			parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationCookie))
-		}
-
-		if _, ok := bodyFieldName(field, "json"); ok {
-			hasJSONBody = true
-			bodyRequired = bodyRequired || isRequired(field)
-		}
-
-		if _, ok := bodyFieldName(field, "xml"); ok {
-			hasXMLBody = true
-			bodyRequired = bodyRequired || isRequired(field)
-		}
+		parameters = append(parameters, o.fieldParams(field)...)
 	}
 
-	if !hasJSONBody && !hasXMLBody {
-		return parameters, nil
+	return parameters
+}
+
+// fieldParams returns a parameter for every parameter tag of the field.
+func (o *oapi) fieldParams(field reflect.StructField) []openapi.Param {
+	var parameters []openapi.Param
+
+	if name := field.Tag.Get(binder.TagHeader); name != "" {
+		parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationHeader))
 	}
 
-	reqBody = &openapi.RequestBody{
-		Content:  map[string]openapi.MediaType{},
-		Required: bodyRequired,
+	if name := field.Tag.Get(binder.TagQuery); name != "" {
+		parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationQuery))
 	}
 
-	if hasJSONBody {
-		reqBody.Content["application/json"] = openapi.MediaType{
-			Schema: o.structSchemaFor(inType, "json"),
-		}
+	if name := field.Tag.Get(binder.TagPath); name != "" {
+		parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationPath))
 	}
 
-	if hasXMLBody {
-		reqBody.Content["application/xml"] = openapi.MediaType{
-			Schema: o.structSchemaFor(inType, "xml"),
-		}
+	if name := field.Tag.Get(binder.TagCookie); name != "" {
+		parameters = append(parameters, o.newParam(field, name, openapi.ParameterLocationCookie))
 	}
 
-	return parameters, reqBody
+	return parameters
 }
 
 func (o *oapi) newParam(field reflect.StructField, name string, location openapi.ParameterLocation) openapi.Param {
@@ -240,19 +223,73 @@ func (o *oapi) newParam(field reflect.StructField, name string, location openapi
 	}
 }
 
+func (o *oapi) parseRequestBody(t reflect.Type) *openapi.RequestBody {
+	hasJSONBody, jsonRequired := hasBody(t, "json")
+	hasXMLBody, xmlRequired := hasBody(t, "xml")
+
+	if !hasJSONBody && !hasXMLBody {
+		return nil
+	}
+
+	reqBody := &openapi.RequestBody{
+		Content:  map[string]openapi.MediaType{},
+		Required: jsonRequired || xmlRequired,
+	}
+
+	if hasJSONBody {
+		reqBody.Content["application/json"] = openapi.MediaType{
+			Schema: o.structSchemaFor(t, "json"),
+		}
+	}
+
+	if hasXMLBody {
+		reqBody.Content["application/xml"] = openapi.MediaType{
+			Schema: o.structSchemaFor(t, "xml"),
+		}
+	}
+
+	return reqBody
+}
+
+// hasBody reports whether any field of the struct is a part of the body encoded with bodyTag
+// and whether any of those fields is required.
+func hasBody(t reflect.Type, bodyTag string) (has bool, required bool) {
+	for field := range t.Fields() {
+		if !field.IsExported() {
+			continue
+		}
+
+		if _, ok := bodyFieldName(field, bodyTag); !ok {
+			continue
+		}
+
+		has = true
+		required = required || isRequired(field)
+	}
+
+	return has, required
+}
+
+// structSchemaFor registers the struct as a component schema and returns a reference to it.
 func (o *oapi) structSchemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrRef {
-	name := o.schemaName(t, bodyTag)
+	name := schemaName(t, bodyTag)
 	ref := openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/" + name}
 
 	if _, exists := o.openAPI.Components.Schemas[name]; exists {
 		return ref
 	}
 
+	o.openAPI.Components.Schemas[name] = openapi.Schema{} // placeholder against recursive types
+	o.openAPI.Components.Schemas[name] = o.objectSchema(t, bodyTag)
+
+	return ref
+}
+
+func (o *oapi) objectSchema(t reflect.Type, bodyTag string) openapi.Schema {
 	schema := openapi.Schema{
 		Type:       openapi.DataTypeObject,
 		Properties: map[string]openapi.SchemaSimpleOrRef{},
 	}
-	o.openAPI.Components.Schemas[name] = schema // placeholder against recursive types
 
 	for field := range t.Fields() {
 		if !field.IsExported() {
@@ -270,21 +307,15 @@ func (o *oapi) structSchemaFor(t reflect.Type, bodyTag string) openapi.SchemaSim
 		}
 	}
 
-	o.openAPI.Components.Schemas[name] = schema
-	return ref
+	return schema
 }
 
 func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrRef {
-	nullable := false
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
-		nullable = true
-	}
+	t, nullable := derefType(t)
 
 	// user defined overrides are called on a pointer to zero value,
 	// since its method set includes value receiver methods too
 	zero := reflect.New(t).Interface()
-	formatter, hasFormat := zero.(OpenAPIFormatter)
 
 	var schema openapi.SchemaSimpleOrRef
 	if typer, ok := zero.(OpenAPITyper); ok {
@@ -293,7 +324,7 @@ func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrR
 		schema = o.baseSchemaFor(t, bodyTag)
 	}
 
-	if hasFormat && schema.Ref == "" {
+	if formatter, ok := zero.(OpenAPIFormatter); ok && schema.Ref == "" {
 		schema.Format = openapi.DataFormat(formatter.OpenAPIFormat())
 	}
 
@@ -303,17 +334,36 @@ func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrR
 
 // baseSchemaFor builds a schema for a non-pointer type, without user defined overrides.
 func (o *oapi) baseSchemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrRef {
-	schema := openapi.SchemaSimpleOrRef{}
+	if schema, ok := wellKnownSchema(t); ok {
+		return schema
+	}
 
+	if schema, ok := primitiveSchema(t.Kind()); ok {
+		return schema
+	}
+
+	switch t.Kind() {
+	case reflect.Slice, reflect.Array:
+		items := o.schemaFor(t.Elem(), bodyTag)
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeArray, Items: &items}
+	case reflect.Map:
+		values := o.schemaFor(t.Elem(), bodyTag)
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeObject, AdditionalProperties: &values}
+	case reflect.Struct:
+		return o.structSchemaFor(t, bodyTag)
+	default:
+		// interfaces, funcs, channels etc. can't be described, leave the schema empty (any type)
+		return openapi.SchemaSimpleOrRef{}
+	}
+}
+
+// wellKnownSchema describes types with a custom text representation.
+func wellKnownSchema(t reflect.Type) (openapi.SchemaSimpleOrRef, bool) {
 	switch t {
 	case reflect.TypeFor[time.Time]():
-		schema.Type = openapi.DataTypeString
-		schema.Format = openapi.DataFormatDateTime
-		return schema
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeString, Format: openapi.DataFormatDateTime}, true
 	case reflect.TypeFor[[]byte]():
-		schema.Type = openapi.DataTypeString
-		schema.Format = openapi.DataFormatByte
-		return schema
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeString, Format: openapi.DataFormatByte}, true
 	}
 
 	// popular third party types, recognized by name to avoid importing them
@@ -322,74 +372,41 @@ func (o *oapi) baseSchemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpl
 		"github.com/gofrs/uuid.UUID",
 		"github.com/gofrs/uuid/v5.UUID",
 		"github.com/satori/go.uuid.UUID":
-		schema.Type = openapi.DataTypeString
-		schema.Format = openapi.DataFormatUUID
-		return schema
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeString, Format: openapi.DataFormatUUID}, true
 	case "cloud.google.com/go/civil.Date":
-		schema.Type = openapi.DataTypeString
-		schema.Format = openapi.DataFormatDate
-		return schema
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeString, Format: openapi.DataFormatDate}, true
 	case "github.com/shopspring/decimal.Decimal":
-		schema.Type = openapi.DataTypeString
-		schema.Format = openapi.DataFormatDecimal
-		return schema
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeString, Format: openapi.DataFormatDecimal}, true
 	}
 
 	if reflect.PointerTo(t).Implements(reflect.TypeFor[encoding.TextMarshaler]()) {
-		schema.Type = openapi.DataTypeString
-		return schema
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeString}, true
 	}
 
-	switch t.Kind() {
-	case reflect.String:
-		schema.Type = openapi.DataTypeString
-	case reflect.Bool:
-		schema.Type = openapi.DataTypeBoolean
-	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16:
-		schema.Type = openapi.DataTypeInteger
-		schema.Format = openapi.DataFormatInt32
-	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint32, reflect.Uint64:
-		schema.Type = openapi.DataTypeInteger
-		schema.Format = openapi.DataFormatInt64
-	case reflect.Float32:
-		schema.Type = openapi.DataTypeNumber
-		schema.Format = openapi.DataFormatFloat
-	case reflect.Float64:
-		schema.Type = openapi.DataTypeNumber
-		schema.Format = openapi.DataFormatDouble
-	case reflect.Slice, reflect.Array:
-		items := o.schemaFor(t.Elem(), bodyTag)
-		schema.Type = openapi.DataTypeArray
-		schema.Items = &items
-	case reflect.Map:
-		values := o.schemaFor(t.Elem(), bodyTag)
-		schema.Type = openapi.DataTypeObject
-		schema.AdditionalProperties = &values
-	case reflect.Struct:
-		return o.structSchemaFor(t, bodyTag)
-	default:
-		// interfaces, funcs, channels etc. can't be described, leave the schema empty (any type)
-	}
-
-	return schema
+	return openapi.SchemaSimpleOrRef{}, false
 }
 
-func (o *oapi) schemaName(t reflect.Type, bodyTag string) string {
-	if o.openAPI.Components.Schemas == nil {
-		o.openAPI.Components.Schemas = map[string]openapi.Schema{}
+func primitiveSchema(kind reflect.Kind) (openapi.SchemaSimpleOrRef, bool) {
+	switch kind {
+	case reflect.String:
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeString}, true
+	case reflect.Bool:
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeBoolean}, true
+	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16:
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeInteger, Format: openapi.DataFormatInt32}, true
+	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint32, reflect.Uint64:
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeInteger, Format: openapi.DataFormatInt64}, true
+	case reflect.Float32:
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeNumber, Format: openapi.DataFormatFloat}, true
+	case reflect.Float64:
+		return openapi.SchemaSimpleOrRef{Type: openapi.DataTypeNumber, Format: openapi.DataFormatDouble}, true
+	default:
+		return openapi.SchemaSimpleOrRef{}, false
 	}
+}
 
-	// package qualified name, e.g. civil.Date. Generic types (e.g. pkg.Page[github.com/x/y.User])
-	// contain characters not allowed in component names, so they are replaced with `_`
-	name := strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
-			return r
-		default:
-			return '_'
-		}
-	}, t.String())
-
+func schemaName(t reflect.Type, bodyTag string) string {
+	name := sanitizeSchemaName(t.String())
 	if t.Name() == "" {
 		name = fmt.Sprintf("Anonymous%08x", rand.Uint32())
 	}
@@ -399,6 +416,20 @@ func (o *oapi) schemaName(t reflect.Type, bodyTag string) string {
 	}
 
 	return name
+}
+
+// sanitizeSchemaName replaces characters not allowed in component names with `_`.
+// Package qualified names (e.g. civil.Date) stay untouched, generic types
+// (e.g. pkg.Page[github.com/x/y.User]) are affected.
+func sanitizeSchemaName(name string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
+			return r
+		default:
+			return '_'
+		}
+	}, name)
 }
 
 func bodyFieldName(field reflect.StructField, bodyTag string) (string, bool) {
@@ -440,6 +471,17 @@ func isRequired(field reflect.StructField) bool {
 	return false
 }
 
-func newOperationID(method, path string) string {
-	return fmt.Sprintf("%s %s", method, path)
+// derefType strips pointers from the type. The second return value is true if there were any.
+func derefType(t reflect.Type) (reflect.Type, bool) {
+	nullable := false
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+		nullable = true
+	}
+
+	return t, nullable
+}
+
+func isEmptyStruct(t reflect.Type) bool {
+	return t.Kind() == reflect.Struct && t.NumField() == 0
 }

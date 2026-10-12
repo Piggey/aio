@@ -67,44 +67,44 @@ func (app *App) Group(path string) *Group {
 	return &g
 }
 
-func (app *App) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodGet, path, handlerFunc)
+func (app *App) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodGet, path, handlerFunc, opts...)
 }
 
-func (app *App) Put[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodPut, path, handlerFunc)
+func (app *App) Put[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodPut, path, handlerFunc, opts...)
 }
 
-func (app *App) Post[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodPost, path, handlerFunc)
+func (app *App) Post[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodPost, path, handlerFunc, opts...)
 }
 
-func (app *App) Delete[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodDelete, path, handlerFunc)
+func (app *App) Delete[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodDelete, path, handlerFunc, opts...)
 }
 
-func (app *App) Options[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodOptions, path, handlerFunc)
+func (app *App) Options[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodOptions, path, handlerFunc, opts...)
 }
 
-func (app *App) Head[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodHead, path, handlerFunc)
+func (app *App) Head[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodHead, path, handlerFunc, opts...)
 }
 
-func (app *App) Patch[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodPatch, path, handlerFunc)
+func (app *App) Patch[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodPatch, path, handlerFunc, opts...)
 }
 
-func (app *App) Trace[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register(http.MethodTrace, path, handlerFunc)
+func (app *App) Trace[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register(http.MethodTrace, path, handlerFunc, opts...)
 }
 
-func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.Register("QUERY", path, handlerFunc)
+func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.Register("QUERY", path, handlerFunc, opts...)
 }
 
-func (app *App) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error)) {
-	app.addEndpoint(method, path, handlerFunc, app.middlewares)
+func (app *App) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
+	app.addEndpoint(method, path, handlerFunc, app.middlewares, opts...)
 }
 
 func (app *App) Run(addr string) error {
@@ -115,7 +115,7 @@ func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
 	return http.ListenAndServeTLS(addr, certFile, keyFile, app.intoMux())
 }
 
-func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []func(http.Handler) http.Handler) {
+func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []func(http.Handler) http.Handler, opts ...endpointOpt) {
 	handler := app.wrapHandlerFunc(handlerFunc)
 	for _, middleware := range middlewares {
 		handler = middleware(handler)
@@ -137,6 +137,10 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		handler: handler,
 		inType:  inType,
 		outType: outType,
+	}
+
+	for _, opt := range opts {
+		opt(&ep)
 	}
 
 	app.endpoints = append(app.endpoints, ep)
