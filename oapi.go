@@ -41,6 +41,18 @@ func defaultOAPI(name string, version string) oapi {
 	}
 }
 
+func (o *oapi) addSecurityScheme(name string, scheme openapi.SecurityScheme, opts []securitySchemeOpt) {
+	for _, opt := range opts {
+		opt(&scheme)
+	}
+
+	if o.openAPI.Components.SecuritySchemes == nil {
+		o.openAPI.Components.SecuritySchemes = map[string]openapi.SecurityScheme{}
+	}
+
+	o.openAPI.Components.SecuritySchemes[name] = scheme
+}
+
 // schemaHandler serves the OpenAPI document. It has to be created after all the endpoints are added.
 func (o *oapi) schemaHandler() http.Handler {
 	schema, err := json.Marshal(o.openAPI)

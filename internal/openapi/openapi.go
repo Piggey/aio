@@ -20,28 +20,32 @@ type (
 	}
 
 	SecurityScheme struct {
-		Type             string            `json:"type"`
-		Description      string            `json:"description,omitempty"`
-		Name             string            `json:"name,omitempty"`             // `apiKey`
-		In               ParameterLocation `json:"in,omitempty"`               // `apiKey`
-		Scheme           string            `json:"scheme,omitempty"`           // `http`
-		BearerFormat     string            `json:"bearerFormat,omitempty"`     // `http`
-		Flows            OAuth2Flows       `json:"flows,omitempty"`            // `oauth2`
-		OpenIDConnectURL string            `json:"openIdConnectUrl,omitempty"` // `openIdConnect`
+		Type              SecuritySchemeType `json:"type"`
+		Description       string             `json:"description,omitempty"`
+		Name              string             `json:"name,omitempty"`              // `apiKey`
+		In                ParameterLocation  `json:"in,omitempty"`                // `apiKey`
+		Scheme            string             `json:"scheme,omitempty"`            // `http`
+		BearerFormat      string             `json:"bearerFormat,omitempty"`      // `http`
+		Flows             *OAuth2Flows       `json:"flows,omitempty"`             // `oauth2`
+		OpenIDConnectURL  string             `json:"openIdConnectUrl,omitempty"`  // `openIdConnect`
+		OAuth2MetadataURL string             `json:"oauth2MetadataUrl,omitempty"` // `oauth2`
+		Deprecated        bool               `json:"deprecated,omitempty"`
 	}
 
 	OAuth2Flows struct {
-		Implicit          *OAuth2Flow `json:"implicit,omitempty"`
-		Password          *OAuth2Flow `json:"password,omitempty"`
-		ClientCredentials *OAuth2Flow `json:"clientCredentials,omitempty"`
-		AuthorizationCode *OAuth2Flow `json:"authorizationCode,omitempty"`
+		Implicit            *OAuth2Flow `json:"implicit,omitempty"`
+		Password            *OAuth2Flow `json:"password,omitempty"`
+		ClientCredentials   *OAuth2Flow `json:"clientCredentials,omitempty"`
+		AuthorizationCode   *OAuth2Flow `json:"authorizationCode,omitempty"`
+		DeviceAuthorization *OAuth2Flow `json:"deviceAuthorization,omitempty"`
 	}
 
 	OAuth2Flow struct {
-		Scopes           map[string]string `json:"scopes,omitempty"`
-		AuthorizationURL string            `json:"authorizationUrl,omitempty"`
-		TokenURL         string            `json:"tokenUrl,omitempty"`
-		RefreshURL       string            `json:"refreshUrl,omitempty"`
+		AuthorizationURL       string            `json:"authorizationUrl,omitempty"`       // `implicit`, `authorizationCode`
+		DeviceAuthorizationURL string            `json:"deviceAuthorizationUrl,omitempty"` // `deviceAuthorization`
+		TokenURL               string            `json:"tokenUrl,omitempty"`               // `password`, `clientCredentials`, `authorizationCode`, `deviceAuthorization`
+		RefreshURL             string            `json:"refreshUrl,omitempty"`
+		Scopes                 map[string]string `json:"scopes"` // required, may be empty
 	}
 
 	PathItem struct {

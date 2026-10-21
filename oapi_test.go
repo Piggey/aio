@@ -566,3 +566,69 @@ func TestUIHandler(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `url: "/openapi/json"`)
 	assert.Contains(t, rec.Body.String(), "<title>&lt;script&gt; | Scalar</title>")
 }
+
+// security schemes
+
+func TestSecuritySchemes(t *testing.T) {
+	o := newTestOAPI()
+	scopes := map[string]string{"read": "read access"}
+
+	for _, opt := range []oapiOpt{
+		WithAPIKeyHeaderSecurity("header", "X-API-Key"),
+		WithAPIKeyQuerySecurity("query", "api_key"),
+		WithAPIKeyCookieSecurity("cookie", "session", WithSecuritySchemeDescription("desc"), WithSecuritySchemeDeprecated()),
+		WithHTTPSecurity("digest", "digest"),
+		WithBasicSecurity("basic"),
+		WithBearerSecurity("bearer", "JWT"),
+		WithMutualTLSSecurity("mtls"),
+		WithOAuth2Security("oauth2",
+			WithOAuth2MetadataURL("https://auth/.well-known/oauth-authorization-server"),
+			WithOAuth2ImplicitFlow("https://auth/authorize", scopes),
+			WithOAuth2PasswordFlow("https://auth/token", nil),
+			WithOAuth2ClientCredentialsFlow("https://auth/token", scopes),
+			WithOAuth2AuthorizationCodeFlow("https://auth/authorize", "https://auth/token", scopes, WithOAuth2RefreshURL("https://auth/refresh")),
+			WithOAuth2DeviceAuthorizationFlow("https://auth/device", "https://auth/token", scopes),
+		),
+		WithOpenIDConnectSecurity("oidc", "https://auth/.well-known/openid-configuration"),
+		WithBasicSecurity("ignoredFlow", WithOAuth2PasswordFlow("https://auth/token", nil)),
+	} {
+		opt(o)
+	}
+
+	assert.Equal(t, map[string]openapi.SecurityScheme{
+		"header": {Type: openapi.SecuritySchemeTypeAPIKey, Name: "X-API-Key", In: openapi.ParameterLocationHeader},
+		"query":  {Type: openapi.SecuritySchemeTypeAPIKey, Name: "api_key", In: openapi.ParameterLocationQuery},
+		"cookie": {Type: openapi.SecuritySchemeTypeAPIKey, Name: "session", In: openapi.ParameterLocationCookie, Description: "desc", Deprecated: true},
+		"digest": {Type: openapi.SecuritySchemeTypeHTTP, Scheme: "digest"},
+		"basic":  {Type: openapi.SecuritySchemeTypeHTTP, Scheme: "basic"},
+		"bearer": {Type: openapi.SecuritySchemeTypeHTTP, Scheme: "bearer", BearerFormat: "JWT"},
+		"mtls":   {Type: openapi.SecuritySchemeTypeMutualTLS},
+		"oauth2": {
+			Type:              openapi.SecuritySchemeTypeOAuth2,
+			OAuth2MetadataURL: "https://auth/.well-known/oauth-authorization-server",
+			Flows: &openapi.OAuth2Flows{
+				Implicit:            &openapi.OAuth2Flow{AuthorizationURL: "https://auth/authorize", Scopes: scopes},
+				Password:            &openapi.OAuth2Flow{TokenURL: "https://auth/token", Scopes: map[string]string{}},
+				ClientCredentials:   &openapi.OAuth2Flow{TokenURL: "https://auth/token", Scopes: scopes},
+				AuthorizationCode:   &openapi.OAuth2Flow{AuthorizationURL: "https://auth/authorize", TokenURL: "https://auth/token", RefreshURL: "https://auth/refresh", Scopes: scopes},
+				DeviceAuthorization: &openapi.OAuth2Flow{DeviceAuthorizationURL: "https://auth/device", TokenURL: "https://auth/token", Scopes: scopes},
+			},
+		},
+		"oidc":        {Type: openapi.SecuritySchemeTypeOpenIDConnect, OpenIDConnectURL: "https://auth/.well-known/openid-configuration"},
+		"ignoredFlow": {Type: openapi.SecuritySchemeTypeHTTP, Scheme: "basic"},
+	}, o.openAPI.Components.SecuritySchemes)
+}
+
+func TestSecuritySchemes_JSON(t *testing.T) {
+	o := newTestOAPI()
+	WithOAuth2Security("oauth2", WithOAuth2ClientCredentialsFlow("https://auth/token", nil))(o)
+	WithBasicSecurity("basic")(o)
+
+	got, err := json.Marshal(o.openAPI.Components.SecuritySchemes)
+	if assert.NoError(t, err) {
+		assert.JSONEq(t, `{
+			"oauth2": {"type": "oauth2", "flows": {"clientCredentials": {"tokenUrl": "https://auth/token", "scopes": {}}}},
+			"basic": {"type": "http", "scheme": "basic"}
+		}`, string(got))
+	}
+}
