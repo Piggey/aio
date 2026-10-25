@@ -282,6 +282,57 @@ func TestSchemaFor_TyperSkipsComponent(t *testing.T) {
 	assert.Empty(t, o.openAPI.Components.Schemas)
 }
 
+type colorEnum string
+
+type priorityEnum int
+
+type withEnums struct {
+	Color    colorEnum     `query:"color"`
+	Priority *priorityEnum `json:"priority"`
+	Colors   []colorEnum   `json:"colors"`
+}
+
+func TestWithEnumType(t *testing.T) {
+	o := newTestOAPI()
+	WithEnumType([]colorEnum{"red", "green"})(o)
+	WithEnumType([]priorityEnum{1, 2, 3})(o)
+
+	parameters, reqBody := o.parseInType(reflect.TypeFor[withEnums]())
+
+	colorRef := openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.colorEnum"}
+	assert.Equal(t, []openapi.Param{{Name: "color", In: openapi.ParameterLocationQuery, Schema: &colorRef}}, parameters)
+
+	assert.Equal(t, openapi.Schema{
+		Type: openapi.DataTypeObject,
+		Properties: map[string]openapi.SchemaSimpleOrRef{
+			"priority": {Ref: "#/components/schemas/aio.priorityEnum", Nullable: true},
+			"colors":   {Type: openapi.DataTypeArray, Items: &colorRef},
+		},
+	}, o.openAPI.Components.Schemas["aio.withEnums"])
+	assert.NotNil(t, reqBody)
+
+	assert.Equal(t, openapi.Schema{
+		Type: openapi.DataTypeString,
+		Enum: []any{colorEnum("red"), colorEnum("green")},
+	}, o.openAPI.Components.Schemas["aio.colorEnum"])
+
+	assert.Equal(t, openapi.Schema{
+		Type:   openapi.DataTypeInteger,
+		Format: openapi.DataFormatInt64,
+		Enum:   []any{priorityEnum(1), priorityEnum(2), priorityEnum(3)},
+	}, o.openAPI.Components.Schemas["aio.priorityEnum"])
+}
+
+func TestWithEnumType_JSON(t *testing.T) {
+	o := newTestOAPI()
+	WithEnumType([]colorEnum{"red", "green"})(o)
+	o.schemaFor(reflect.TypeFor[colorEnum](), "json")
+
+	got, err := json.Marshal(o.openAPI.Components.Schemas["aio.colorEnum"])
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"type":"string","enum":["red","green"]}`, string(got))
+}
+
 func TestStructSchemaFor(t *testing.T) {
 	o := newTestOAPI()
 
@@ -574,9 +625,9 @@ func TestSecuritySchemes(t *testing.T) {
 	scopes := map[string]string{"read": "read access"}
 
 	for _, opt := range []oapiOpt{
-		WithAPIKeyHeaderSecurity("header", "X-API-Key"),
-		WithAPIKeyQuerySecurity("query", "api_key"),
-		WithAPIKeyCookieSecurity("cookie", "session", WithSecuritySchemeDescription("desc"), WithSecuritySchemeDeprecated()),
+		WithAPIKeySecurity("header", "X-API-Key", ParameterLocationHeader),
+		WithAPIKeySecurity("query", "api_key", ParameterLocationQuery),
+		WithAPIKeySecurity("cookie", "session", ParameterLocationCookie, WithSecuritySchemeDescription("desc"), WithSecuritySchemeDeprecated()),
 		WithHTTPSecurity("digest", "digest"),
 		WithBasicSecurity("basic"),
 		WithBearerSecurity("bearer", "JWT"),

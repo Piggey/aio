@@ -1,6 +1,10 @@
 package aio
 
-import "github.com/Piggey/aio/internal/openapi"
+import (
+	"reflect"
+
+	"github.com/Piggey/aio/internal/openapi"
+)
 
 type oapiOpt func(oapi *oapi)
 
@@ -51,25 +55,24 @@ func WithOpenAPILicense(name, url string) oapiOpt {
 	}
 }
 
-// WithAPIKeyHeaderSecurity declares an API key security scheme named name,
-// with the key passed in the header headerName.
-func WithAPIKeyHeaderSecurity(name, headerName string, opts ...securitySchemeOpt) oapiOpt {
-	return withAPIKeySecurity(name, headerName, openapi.ParameterLocationHeader, opts)
+// WithEnumType declares T as an enum with the given values.
+// Every occurrence of T in request and response types is described
+// in the OpenAPI document as a reference to a component schema listing the values.
+func WithEnumType[T ~string | ~int | ~uint](values []T) oapiOpt {
+	return func(oapi *oapi) {
+		enumValues := make([]any, len(values))
+		for i, value := range values {
+			enumValues[i] = value
+		}
+
+		oapi.enums[reflect.TypeFor[T]()] = enumValues
+	}
 }
 
-// WithAPIKeyQuerySecurity declares an API key security scheme named name,
-// with the key passed in the query parameter paramName.
-func WithAPIKeyQuerySecurity(name, paramName string, opts ...securitySchemeOpt) oapiOpt {
-	return withAPIKeySecurity(name, paramName, openapi.ParameterLocationQuery, opts)
-}
-
-// WithAPIKeyCookieSecurity declares an API key security scheme named name,
-// with the key passed in the cookie cookieName.
-func WithAPIKeyCookieSecurity(name, cookieName string, opts ...securitySchemeOpt) oapiOpt {
-	return withAPIKeySecurity(name, cookieName, openapi.ParameterLocationCookie, opts)
-}
-
-func withAPIKeySecurity(name, paramName string, in openapi.ParameterLocation, opts []securitySchemeOpt) oapiOpt {
+// WithAPIKeySecurity declares an API key security scheme named name,
+// with the key passed in the parameter paramName located in in
+// (ParameterLocationHeader, ParameterLocationQuery or ParameterLocationCookie).
+func WithAPIKeySecurity(name, paramName string, in ParameterLocation, opts ...securitySchemeOpt) oapiOpt {
 	return func(oapi *oapi) {
 		oapi.addSecurityScheme(name, openapi.SecurityScheme{
 			Type: openapi.SecuritySchemeTypeAPIKey,

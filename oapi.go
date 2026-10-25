@@ -20,6 +20,7 @@ type oapi struct {
 	uiPath     string
 	schemaPath string
 	openAPI    openapi.OpenAPI
+	enums      map[reflect.Type][]any // registered with WithEnumType
 }
 
 func defaultOAPI(name string, version string) oapi {
@@ -38,6 +39,7 @@ func defaultOAPI(name string, version string) oapi {
 				Schemas: map[string]openapi.Schema{},
 			},
 		},
+		enums: map[reflect.Type][]any{},
 	}
 }
 
@@ -340,8 +342,31 @@ func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrR
 		schema.Format = openapi.DataFormat(formatter.OpenAPIFormat())
 	}
 
+	if values, ok := o.enums[t]; ok {
+		schema = o.enumSchemaFor(t, schema, values)
+	}
+
 	schema.Nullable = nullable
 	return schema
+}
+
+// enumSchemaFor registers the enum type as a component schema and returns a reference to it.
+// base describes the underlying type of the enum.
+func (o *oapi) enumSchemaFor(t reflect.Type, base openapi.SchemaSimpleOrRef, values []any) openapi.SchemaSimpleOrRef {
+	name := schemaName(t, "")
+	ref := openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/" + name}
+
+	if _, exists := o.openAPI.Components.Schemas[name]; exists {
+		return ref
+	}
+
+	o.openAPI.Components.Schemas[name] = openapi.Schema{
+		Type:   base.Type,
+		Format: base.Format,
+		Enum:   values,
+	}
+
+	return ref
 }
 
 // baseSchemaFor builds a schema for a non-pointer type, without user defined overrides.

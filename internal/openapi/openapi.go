@@ -108,6 +108,7 @@ type (
 		Description string                       `json:"description,omitempty"`
 		Required    []string                     `json:"required,omitempty"`
 		Properties  map[string]SchemaSimpleOrRef `json:"properties,omitempty"`
+		Enum        []any                        `json:"enum,omitempty"`
 		Example     string                       `json:"example,omitempty"`
 	}
 
