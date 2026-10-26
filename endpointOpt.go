@@ -1,12 +1,10 @@
 package aio
 
-import "net/http"
-
 type endpointOpt func(ep *endpoint)
 
 // WithMiddlewares adds middlewares applied only to this endpoint.
 // They run after the App and Group middlewares, right before the handler.
-func WithMiddlewares(middlewares ...func(http.Handler) http.Handler) endpointOpt {
+func WithMiddlewares(middlewares ...Middleware) endpointOpt {
 	return func(ep *endpoint) {
 		ep.middlewares = append(ep.middlewares, middlewares...)
 	}

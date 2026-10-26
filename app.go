@@ -16,7 +16,7 @@ type App struct {
 	binder *binder.Binder
 	oapi   oapi
 
-	middlewares []func(http.Handler) http.Handler
+	middlewares []Middleware
 	endpoints   []endpoint
 	groups      []Group
 }
@@ -50,7 +50,7 @@ func (app *App) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) 
 	_ = app.binder.BindOut(w, r, pd.Status, pd)
 }
 
-func (app *App) Use(middleware func(http.Handler) http.Handler) {
+func (app *App) Use(middleware Middleware) {
 	app.middlewares = append(app.middlewares, middleware)
 }
 
@@ -115,7 +115,7 @@ func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
 	return http.ListenAndServeTLS(addr, certFile, keyFile, app.intoMux())
 }
 
-func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []func(http.Handler) http.Handler, opts ...endpointOpt) {
+func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []Middleware, opts ...endpointOpt) {
 	inType := reflect.TypeFor[In]()
 	if inType.Kind() != reflect.Struct {
 		panic("aio: In type has to be a struct")
@@ -147,31 +147,39 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		handler = middleware(handler)
 	}
 
-	ep.handler = handler
+	ep.handler = app.intoHTTPHandler(handler)
 
 	app.endpoints = append(app.endpoints, ep)
 	slog.Debug("registered endpoint", slog.String("method", method), slog.String("path", path))
 }
 
-func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, In) (Out, error)) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, In) (Out, error)) HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
 		var in In
 		err := app.binder.BindIn(r, &in)
 		if err != nil {
-			app.ErrorHandler(w, r, ErrBadRequest)
-			return
+			return fmt.Errorf("%w: binder.BindIn: %w", ErrBadRequest, err)
 		}
 
 		out, err := handlerFunc(r.Context(), in)
 		if err != nil {
-			app.ErrorHandler(w, r, ErrInternalServerError)
-			return
+			return err
 		}
 
 		err = app.binder.BindOut(w, r, http.StatusOK, out)
 		if err != nil {
-			app.ErrorHandler(w, r, ErrInternalServerError)
-			return
+			return fmt.Errorf("binder.BindOut: %w", err)
+		}
+
+		return nil
+	}
+}
+
+func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := handler(w, r)
+		if err != nil {
+			app.ErrorHandler(w, r, err)
 		}
 	})
 }

@@ -50,12 +50,13 @@ func main() {
 
 	kutas := app.Group("/kutas")
 
-	kutas.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	kutas.Use(func(next aio.HandlerFunc) aio.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) error {
 			log.Println("i sie zesralo")
-			next.ServeHTTP(w, r)
-			log.Println("prrrrt")
-		})
+			err := next(w, r)
+			log.Println("prrrrt", err)
+			return err
+		}
 	})
 
 	kutas.Get("/huj", func(ctx context.Context, _ struct{}) (struct{}, error) {

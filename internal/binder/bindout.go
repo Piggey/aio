@@ -17,10 +17,12 @@ func (b *Binder) BindOut(w http.ResponseWriter, r *http.Request, statusCode int,
 	switch mimetype {
 	case mimetypeApplicationXml:
 		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(statusCode)
 		return xml.NewEncoder(w).Encode(obj)
 
 	default:
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
 		return json.NewEncoder(w).Encode(obj)
 	}
 }

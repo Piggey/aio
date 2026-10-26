@@ -11,7 +11,7 @@ type Group struct {
 	app         *App
 	parent      *Group
 	path        string
-	middlewares []func(http.Handler) http.Handler
+	middlewares []Middleware
 }
 
 func (g *Group) Group(path string) *Group {
@@ -27,7 +27,7 @@ func (g *Group) Group(path string) *Group {
 	return &child
 }
 
-func (g *Group) Use(middleware func(http.Handler) http.Handler) {
+func (g *Group) Use(middleware Middleware) {
 	g.middlewares = append(g.middlewares, middleware)
 }
 
