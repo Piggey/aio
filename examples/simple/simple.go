@@ -36,6 +36,9 @@ func main() {
 
 	app.Use(middleware.Recover())
 	app.Use(middleware.Logger(nil))
+	app.Use(middleware.CORS(middleware.CORSConfig{
+		AllowedOrigins: []string{"http://localhost:3000"},
+	}))
 
 	app.Get("/test", func(ctx context.Context, _ struct{}) (struct{}, error) {
 		log.Println("test")

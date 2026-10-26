@@ -10,6 +10,8 @@ type endpoint struct {
 	path        string
 	handler     http.Handler
 	middlewares []Middleware
+	// preflight runs the same middlewares as handler, but ends with 204 No Content instead of the handler
+	preflight http.Handler
 
 	// openAPI
 	summary          string

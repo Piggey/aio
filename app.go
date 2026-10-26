@@ -142,16 +142,20 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 	}
 
 	handler := app.wrapHandlerFunc(handlerFunc)
+	preflight := HandlerFunc(noContent)
 
 	for _, middleware := range ep.middlewares {
 		handler = middleware(handler)
+		preflight = middleware(preflight)
 	}
 
 	for _, middleware := range middlewares {
 		handler = middleware(handler)
+		preflight = middleware(preflight)
 	}
 
 	ep.handler = app.intoHTTPHandler(handler)
+	ep.preflight = app.intoHTTPHandler(preflight)
 
 	app.endpoints = append(app.endpoints, ep)
 	slog.Debug("registered endpoint", slog.String("method", method), slog.String("path", path))
@@ -190,13 +194,27 @@ func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
 
 func (app *App) intoMux() *http.ServeMux {
 	mux := http.NewServeMux()
+	endpointsByPath := map[string][]endpoint{}
 	for _, ep := range app.endpoints {
 		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
 		mux.Handle(pattern, ep.handler)
+		endpointsByPath[ep.path] = append(endpointsByPath[ep.path], ep)
 
 		if app.oapi.isEnabled {
 			app.oapi.addEndpoint(ep)
 		}
+	}
+
+	// without it CORS preflight would end with 405 before reaching any middleware
+	for path, eps := range endpointsByPath {
+		hasOptions := slices.ContainsFunc(eps, func(ep endpoint) bool {
+			return ep.method == http.MethodOptions
+		})
+		if hasOptions {
+			continue
+		}
+
+		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), preflightHandler(eps))
 	}
 
 	if app.oapi.isEnabled {
