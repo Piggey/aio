@@ -43,7 +43,6 @@ func (app *App) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) 
 		pd = ProblemDetails{
 			Title:  http.StatusText(http.StatusInternalServerError),
 			Status: http.StatusInternalServerError,
-			Detail: nil,
 		}
 	}
 

@@ -1,21 +1,24 @@
 package aio
 
-import "net/http"
-
 type ProblemDetails struct {
-	Title  string         `json:"title"`
-	Status int            `json:"status"`
-	Detail map[string]any `json:"detail"`
+	Title  string `json:"title" xml:"title"`
+	Status int    `json:"status" xml:"status"`
+	Detail string `json:"detail,omitempty" xml:"detail,omitempty"`
 }
 
 func (pd ProblemDetails) Error() string {
 	return pd.Title
 }
 
-func newProblemDetails(status int) ProblemDetails {
+func Error(status int, title string, err error) ProblemDetails {
+	detail := ""
+	if err != nil {
+		detail = err.Error()
+	}
+
 	return ProblemDetails{
-		Title:  http.StatusText(status),
+		Title:  title,
 		Status: status,
-		Detail: nil,
+		Detail: detail,
 	}
 }

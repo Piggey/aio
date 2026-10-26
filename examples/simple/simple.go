@@ -60,8 +60,7 @@ func main() {
 	})
 
 	kutas.Get("/huj", func(ctx context.Context, _ struct{}) (struct{}, error) {
-		log.Println("huj")
-		return struct{}{}, aio.ErrBadRequest
+		return struct{}{}, aio.Error(http.StatusBadRequest, "nie podoba mi sie ten request", nil)
 	})
 
 	err := app.Run(":8080")

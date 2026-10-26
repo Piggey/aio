@@ -5,6 +5,6 @@ import (
 )
 
 var (
-	ErrBadRequest          error = newProblemDetails(http.StatusBadRequest)
-	ErrInternalServerError error = newProblemDetails(http.StatusInternalServerError)
+	ErrBadRequest          error = Error(http.StatusBadRequest, http.StatusText(http.StatusBadRequest), nil)
+	ErrInternalServerError error = Error(http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError), nil)
 )

@@ -62,7 +62,7 @@ func TestErrorHandling(t *testing.T) {
 		{
 			name:       "opakowany ProblemDetails z handlera jest zachowany",
 			body:       `{"name":"x"}`,
-			handlerErr: errors.Join(errDomain, newProblemDetails(http.StatusConflict)),
+			handlerErr: errors.Join(errDomain, Error(http.StatusConflict, "conflict", nil)),
 			wantStatus: http.StatusConflict,
 		},
 		{
@@ -74,7 +74,7 @@ func TestErrorHandling(t *testing.T) {
 		{
 			name:        "blad z middleware'a jest obslugiwany przez ErrorHandler",
 			body:        `{"name":"x"}`,
-			middlewares: []Middleware{errorMiddleware(newProblemDetails(http.StatusUnauthorized))},
+			middlewares: []Middleware{errorMiddleware(Error(http.StatusUnauthorized, "unauth", nil))},
 			wantStatus:  http.StatusUnauthorized,
 		},
 		{
@@ -83,7 +83,7 @@ func TestErrorHandling(t *testing.T) {
 			middlewares: []Middleware{func(next HandlerFunc) HandlerFunc {
 				return next
 			}},
-			handlerErr: newProblemDetails(http.StatusForbidden),
+			handlerErr: Error(http.StatusForbidden, "forbidden", nil),
 			wantStatus: http.StatusForbidden,
 		},
 	}
