@@ -6,9 +6,10 @@ import (
 )
 
 type endpoint struct {
-	method  string
-	path    string
-	handler http.Handler
+	method      string
+	path        string
+	handler     http.Handler
+	middlewares []func(http.Handler) http.Handler
 
 	// openAPI
 	summary          string

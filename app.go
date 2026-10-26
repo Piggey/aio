@@ -116,11 +116,6 @@ func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
 }
 
 func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []func(http.Handler) http.Handler, opts ...endpointOpt) {
-	handler := app.wrapHandlerFunc(handlerFunc)
-	for _, middleware := range middlewares {
-		handler = middleware(handler)
-	}
-
 	inType := reflect.TypeFor[In]()
 	if inType.Kind() != reflect.Struct {
 		panic("aio: In type has to be a struct")
@@ -134,7 +129,6 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 	ep := endpoint{
 		method:  method,
 		path:    path,
-		handler: handler,
 		inType:  inType,
 		outType: outType,
 	}
@@ -142,6 +136,18 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 	for _, opt := range opts {
 		opt(&ep)
 	}
+
+	handler := app.wrapHandlerFunc(handlerFunc)
+
+	for _, middleware := range ep.middlewares {
+		handler = middleware(handler)
+	}
+
+	for _, middleware := range middlewares {
+		handler = middleware(handler)
+	}
+
+	ep.handler = handler
 
 	app.endpoints = append(app.endpoints, ep)
 	slog.Debug("registered endpoint", slog.String("method", method), slog.String("path", path))
