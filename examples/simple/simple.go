@@ -34,6 +34,7 @@ func main() {
 		aio.WithValidator(validator.New()),
 	)
 
+	app.Use(middleware.Recover())
 	app.Use(middleware.Logger(nil))
 
 	app.Get("/test", func(ctx context.Context, _ struct{}) (struct{}, error) {

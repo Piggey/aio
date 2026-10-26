@@ -17,6 +17,7 @@ func Logger(logger *slog.Logger) aio.Middleware {
 
 	return func(next aio.HandlerFunc) aio.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
+			level := slog.LevelInfo
 			start := time.Now()
 			sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
@@ -28,16 +29,15 @@ func Logger(logger *slog.Logger) aio.Middleware {
 			defer func() {
 				attrs = append(attrs, slog.Duration("duration", time.Since(start)))
 				attrs = append(attrs, slog.Int("status", sr.status))
+				logger.LogAttrs(r.Context(), level, "request", attrs...)
 			}()
 
-			level := slog.LevelInfo
 			err := next(sr, r)
 			if err != nil {
 				level = slog.LevelError
 				attrs = append(attrs, slog.String("error", err.Error()))
 			}
 
-			logger.LogAttrs(r.Context(), level, "request", attrs...)
 			return err
 		}
 	}

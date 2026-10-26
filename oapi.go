@@ -70,7 +70,16 @@ func (o *oapi) schemaHandler() http.Handler {
 
 // uiHandler serves the Scalar API reference UI pointing at schemaPath.
 func (o *oapi) uiHandler() http.Handler {
-	page := fmt.Sprintf(`<!doctype html>
+	page := uiPage(o.openAPI.Info.Title, o.schemaPath)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(page))
+	})
+}
+
+func uiPage(title string, schemaPath string) string {
+	return fmt.Sprintf(`<!doctype html>
 <html>
 <head>
 	<title>%s | Scalar</title>
@@ -82,12 +91,7 @@ func (o *oapi) uiHandler() http.Handler {
 	<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 	<script>Scalar.createApiReference('#app', { url: %q })</script>
 </body>
-</html>`, html.EscapeString(o.openAPI.Info.Title), o.schemaPath)
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(page))
-	})
+</html>`, html.EscapeString(title), schemaPath)
 }
 
 func (o *oapi) addEndpoint(ep endpoint) {

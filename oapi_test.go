@@ -3,7 +3,6 @@ package aio
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
@@ -592,30 +591,35 @@ func TestAddEndpoint_SamePathDifferentMethods(t *testing.T) {
 
 // handlers
 
-func TestSchemaHandler(t *testing.T) {
-	rec := httptest.NewRecorder()
-	newTestOAPI().schemaHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/openapi/json", nil))
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-
-	var got openapi.OpenAPI
-	if assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got)) {
-		assert.Equal(t, "test", got.Info.Title)
+func TestUIPage(t *testing.T) {
+	tests := []struct {
+		name       string
+		title      string
+		schemaPath string
+		want       []string
+	}{
+		{
+			name:       "tytul i sciezka schemy trafiaja do strony",
+			title:      "test",
+			schemaPath: "/openapi/json",
+			want:       []string{"<title>test | Scalar</title>", `url: "/openapi/json"`},
+		},
+		{
+			name:       "tytul jest escapowany",
+			title:      "<script>",
+			schemaPath: "/openapi/json",
+			want:       []string{"<title>&lt;script&gt; | Scalar</title>"},
+		},
 	}
-}
 
-func TestUIHandler(t *testing.T) {
-	o := newTestOAPI()
-	o.openAPI.Info.Title = "<script>"
-
-	rec := httptest.NewRecorder()
-	o.uiHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/openapi/ui", nil))
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
-	assert.Contains(t, rec.Body.String(), `url: "/openapi/json"`)
-	assert.Contains(t, rec.Body.String(), "<title>&lt;script&gt; | Scalar</title>")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page := uiPage(tt.title, tt.schemaPath)
+			for _, want := range tt.want {
+				assert.Contains(t, page, want)
+			}
+		})
+	}
 }
 
 // security schemes

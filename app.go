@@ -38,15 +38,20 @@ func New(name string, version string, appOpts ...appOpt) *App {
 }
 
 func (app *App) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
+	pd := problemDetailsFor(err)
+	_ = app.binder.BindOut(w, r, pd.Status, pd)
+}
+
+func problemDetailsFor(err error) ProblemDetails {
 	pd, ok := errors.AsType[ProblemDetails](err)
 	if !ok {
-		pd = ProblemDetails{
+		return ProblemDetails{
 			Title:  http.StatusText(http.StatusInternalServerError),
 			Status: http.StatusInternalServerError,
 		}
 	}
 
-	_ = app.binder.BindOut(w, r, pd.Status, pd)
+	return pd
 }
 
 func (app *App) Use(middleware Middleware) {
