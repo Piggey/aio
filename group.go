@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	pathpkg "path"
+	"slices"
 )
 
 type Group struct {
@@ -18,11 +19,10 @@ func (g *Group) Group(path string) *Group {
 		app:         g.app,
 		parent:      g,
 		path:        pathpkg.Join(g.path, path),
-		middlewares: []func(http.Handler) http.Handler{},
+		middlewares: slices.Clone(g.middlewares),
 	}
 
 	g.app.groups = append(g.app.groups, child)
-	copy(child.middlewares, g.middlewares)
 
 	return &child
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"slices"
 
 	"github.com/Piggey/aio/internal/binder"
 )
@@ -58,10 +59,9 @@ func (app *App) Group(path string) *Group {
 		app:         app,
 		parent:      nil,
 		path:        path,
-		middlewares: []func(http.Handler) http.Handler{},
+		middlewares: slices.Clone(app.middlewares),
 	}
 
-	copy(g.middlewares, app.middlewares)
 	app.groups = append(app.groups, g)
 
 	return &g
