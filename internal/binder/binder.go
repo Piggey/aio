@@ -20,7 +20,7 @@ func New(binderOpts ...binderOpt) *Binder {
 
 type binderOpt func(b *Binder)
 
-func WithCustomValidatorInstance(v *validator.Validate) binderOpt {
+func WithValidator(v *validator.Validate) binderOpt {
 	return func(b *Binder) {
 		b.validate = v
 	}

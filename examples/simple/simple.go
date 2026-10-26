@@ -30,7 +30,7 @@ func main() {
 			aio.WithAPIKeySecurity("apiKey", "api_key", aio.ParameterLocationQuery),
 			aio.WithEnumType(MyCustomEnumValues),
 		),
-		aio.WithCustomValidator(validator.New()),
+		aio.WithValidator(validator.New()),
 	)
 
 	app.Get("/test", func(ctx context.Context, _ struct{}) (struct{}, error) {

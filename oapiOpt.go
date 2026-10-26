@@ -14,13 +14,13 @@ func WithoutOpenAPI() oapiOpt {
 	}
 }
 
-func WithCustomUIPath(uiPath string) oapiOpt {
+func WithUIPath(uiPath string) oapiOpt {
 	return func(oapi *oapi) {
 		oapi.uiPath = uiPath
 	}
 }
 
-func WithCustomOpenAPIPath(openAPIPath string) oapiOpt {
+func WithOpenAPIPath(openAPIPath string) oapiOpt {
 	return func(oapi *oapi) {
 		oapi.schemaPath = openAPIPath
 	}

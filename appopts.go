@@ -15,8 +15,8 @@ func WithOpenAPIOptions(openapiOpts ...oapiOpt) appOpt {
 	}
 }
 
-func WithCustomValidator(validate *validator.Validate) appOpt {
+func WithValidator(validate *validator.Validate) appOpt {
 	return func(app *App) {
-		app.binder = binder.New(binder.WithCustomValidatorInstance(validate))
+		app.binder = binder.New(binder.WithValidator(validate))
 	}
 }
