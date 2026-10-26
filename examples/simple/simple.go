@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/Piggey/aio"
+	"github.com/Piggey/aio/middleware"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -32,6 +33,8 @@ func main() {
 		),
 		aio.WithValidator(validator.New()),
 	)
+
+	app.Use(middleware.Logger(nil))
 
 	app.Get("/test", func(ctx context.Context, _ struct{}) (struct{}, error) {
 		log.Println("test")
