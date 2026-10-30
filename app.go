@@ -49,6 +49,7 @@ func problemDetailsFor(err error) ProblemDetails {
 		return ProblemDetails{
 			Title:  http.StatusText(http.StatusInternalServerError),
 			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
 		}
 	}
 
@@ -171,7 +172,7 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 		var in In
 		err := app.binder.BindIn(r, &in)
 		if err != nil {
-			return fmt.Errorf("%w: binder.BindIn: %w", ErrBadRequest, err)
+			return Error(http.StatusBadRequest, "Bad Request", err)
 		}
 
 		out, err := handlerFunc(r.Context(), in)
@@ -181,7 +182,7 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 
 		err = app.binder.BindOut(w, r, http.StatusOK, out)
 		if err != nil {
-			return fmt.Errorf("binder.BindOut: %w", err)
+			return Error(http.StatusInternalServerError, "Response write failed", err)
 		}
 
 		return nil
