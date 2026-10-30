@@ -16,9 +16,10 @@ type App struct {
 	binder *binder.Binder
 	oapi   oapi
 
-	middlewares []Middleware
-	endpoints   []endpoint
-	groups      []Group
+	middlewares  []Middleware
+	endpointOpts []endpointOpt
+	endpoints    []endpoint
+	groups       []Group
 }
 
 func New(name string, version string, appOpts ...appOpt) *App {
@@ -135,6 +136,10 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		path:    path,
 		inType:  inType,
 		outType: outType,
+	}
+
+	for _, opt := range app.endpointOpts {
+		opt(&ep)
 	}
 
 	for _, opt := range opts {
