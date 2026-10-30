@@ -144,7 +144,7 @@ func setOperation(pathItem *openapi.PathItem, method string, operation openapi.O
 }
 
 func newOperationID(method, path string) string {
-	return fmt.Sprintf("%s %s", method, path)
+	return fmt.Sprintf("%s%s", method, strings.ReplaceAll(path, "/", "-"))
 }
 
 func (o *oapi) parseOutType(outType reflect.Type, errorStatusCodes []int) map[int]openapi.Response {
@@ -161,7 +161,7 @@ func (o *oapi) parseOutType(outType reflect.Type, errorStatusCodes []int) map[in
 }
 
 // newResponse describes a response body the way binder.BindOut writes it:
-// json by default, xml if requested with the Accept header.
+// json by default, xml if requested with the Accept header. Both share the json schema.
 func (o *oapi) newResponse(statusCode int, t reflect.Type) openapi.Response {
 	response := openapi.Response{
 		Description: http.StatusText(statusCode),
@@ -172,9 +172,10 @@ func (o *oapi) newResponse(statusCode int, t reflect.Type) openapi.Response {
 		return response // struct{} - nothing worth describing
 	}
 
+	schema := o.schemaFor(t, "json")
 	response.Content = map[string]openapi.MediaType{
-		"application/json": {Schema: o.schemaFor(t, "json")},
-		"application/xml":  {Schema: o.schemaFor(t, "xml")},
+		"application/json": {Schema: schema},
+		"application/xml":  {Schema: schema},
 	}
 
 	return response
@@ -241,32 +242,22 @@ func (o *oapi) newParam(field reflect.StructField, name string, location openapi
 	}
 }
 
+// parseRequestBody describes the body the way binder.BindIn reads it: json or xml, both share the json schema.
 func (o *oapi) parseRequestBody(t reflect.Type) *openapi.RequestBody {
-	hasJSONBody, jsonRequired := hasBody(t, "json")
-	hasXMLBody, xmlRequired := hasBody(t, "xml")
-
-	if !hasJSONBody && !hasXMLBody {
+	has, required := hasBody(t, "json")
+	if !has {
 		return nil
 	}
 
-	reqBody := &openapi.RequestBody{
-		Content:  map[string]openapi.MediaType{},
-		Required: jsonRequired || xmlRequired,
-	}
+	schema := o.structSchemaFor(t, "json")
 
-	if hasJSONBody {
-		reqBody.Content["application/json"] = openapi.MediaType{
-			Schema: o.structSchemaFor(t, "json"),
-		}
+	return &openapi.RequestBody{
+		Content: map[string]openapi.MediaType{
+			"application/json": {Schema: schema},
+			"application/xml":  {Schema: schema},
+		},
+		Required: required,
 	}
-
-	if hasXMLBody {
-		reqBody.Content["application/xml"] = openapi.MediaType{
-			Schema: o.structSchemaFor(t, "xml"),
-		}
-	}
-
-	return reqBody
 }
 
 // hasBody reports whether any field of the struct is a part of the body encoded with bodyTag
@@ -290,7 +281,7 @@ func hasBody(t reflect.Type, bodyTag string) (has bool, required bool) {
 
 // structSchemaFor registers the struct as a component schema and returns a reference to it.
 func (o *oapi) structSchemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrRef {
-	name := schemaName(t, bodyTag)
+	name := schemaName(t)
 	ref := openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/" + name}
 
 	if _, exists := o.openAPI.Components.Schemas[name]; exists {
@@ -357,7 +348,7 @@ func (o *oapi) schemaFor(t reflect.Type, bodyTag string) openapi.SchemaSimpleOrR
 // enumSchemaFor registers the enum type as a component schema and returns a reference to it.
 // base describes the underlying type of the enum.
 func (o *oapi) enumSchemaFor(t reflect.Type, base openapi.SchemaSimpleOrRef, values []any) openapi.SchemaSimpleOrRef {
-	name := schemaName(t, "")
+	name := schemaName(t)
 	ref := openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/" + name}
 
 	if _, exists := o.openAPI.Components.Schemas[name]; exists {
@@ -446,17 +437,12 @@ func primitiveSchema(kind reflect.Kind) (openapi.SchemaSimpleOrRef, bool) {
 	}
 }
 
-func schemaName(t reflect.Type, bodyTag string) string {
-	name := sanitizeSchemaName(t.String())
+func schemaName(t reflect.Type) string {
 	if t.Name() == "" {
-		name = fmt.Sprintf("Anonymous%08x", rand.Uint32())
+		return fmt.Sprintf("Anonymous%08x", rand.Uint32())
 	}
 
-	if bodyTag == "xml" {
-		name += "XML"
-	}
-
-	return name
+	return sanitizeSchemaName(t.String())
 }
 
 // sanitizeSchemaName replaces characters not allowed in component names with `_`.

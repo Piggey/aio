@@ -115,7 +115,31 @@ func TestIsEmptyStruct(t *testing.T) {
 }
 
 func TestNewOperationID(t *testing.T) {
-	assert.Equal(t, "GET /users/{id}", newOperationID(http.MethodGet, "/users/{id}"))
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		want   string
+	}{
+		{
+			name:   "sciezka z parametrem",
+			method: http.MethodGet,
+			path:   "/users/{id}",
+			want:   "GET-users-{id}",
+		},
+		{
+			name:   "korzen",
+			method: http.MethodPost,
+			path:   "/",
+			want:   "POST-",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, newOperationID(tt.method, tt.path))
+		})
+	}
 }
 
 func TestIsRequired(t *testing.T) {
@@ -187,12 +211,11 @@ func TestSanitizeSchemaName(t *testing.T) {
 }
 
 func TestSchemaName(t *testing.T) {
-	assert.Equal(t, "aio.item", schemaName(reflect.TypeFor[item](), "json"))
-	assert.Equal(t, "aio.itemXML", schemaName(reflect.TypeFor[item](), "xml"))
-	assert.Equal(t, "aio.page_github.com_Piggey_aio.item_", schemaName(reflect.TypeFor[page[item]](), "json"))
+	assert.Equal(t, "aio.item", schemaName(reflect.TypeFor[item]()))
+	assert.Equal(t, "aio.page_github.com_Piggey_aio.item_", schemaName(reflect.TypeFor[page[item]]()))
 
-	anonymous := schemaName(reflect.TypeFor[struct{ A int }](), "xml")
-	assert.Regexp(t, `^Anonymous[0-9a-f]{8}XML$`, anonymous)
+	anonymous := schemaName(reflect.TypeFor[struct{ A int }]())
+	assert.Regexp(t, `^Anonymous[0-9a-f]{8}$`, anonymous)
 }
 
 // schemas
@@ -335,22 +358,14 @@ func TestWithEnumType_JSON(t *testing.T) {
 func TestStructSchemaFor(t *testing.T) {
 	o := newTestOAPI()
 
-	jsonRef := o.structSchemaFor(reflect.TypeFor[body](), "json")
-	xmlRef := o.structSchemaFor(reflect.TypeFor[item](), "xml")
+	ref := o.structSchemaFor(reflect.TypeFor[body](), "json")
 
-	assert.Equal(t, openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.body"}, jsonRef)
-	assert.Equal(t, openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.itemXML"}, xmlRef)
-
+	assert.Equal(t, openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.body"}, ref)
 	assert.Equal(t, openapi.Schema{
 		Type:       openapi.DataTypeObject,
 		Required:   []string{"name"},
 		Properties: map[string]openapi.SchemaSimpleOrRef{"name": stringSchema},
 	}, o.openAPI.Components.Schemas["aio.body"])
-
-	assert.Equal(t, openapi.Schema{
-		Type:       openapi.DataTypeObject,
-		Properties: map[string]openapi.SchemaSimpleOrRef{"itemName": stringSchema},
-	}, o.openAPI.Components.Schemas["aio.itemXML"])
 }
 
 func TestStructSchemaFor_Recursive(t *testing.T) {
@@ -440,22 +455,14 @@ func TestParseRequestBody(t *testing.T) {
 		assert.Nil(t, newTestOAPI().parseRequestBody(reflect.TypeFor[params]()))
 	})
 
-	t.Run("json and xml", func(t *testing.T) {
+	t.Run("json and xml share the json schema", func(t *testing.T) {
 		assert.Equal(t, &openapi.RequestBody{
 			Required: true,
 			Content: map[string]openapi.MediaType{
 				"application/json": {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.body"}},
-				"application/xml":  {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.bodyXML"}},
+				"application/xml":  {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.body"}},
 			},
 		}, newTestOAPI().parseRequestBody(reflect.TypeFor[body]()))
-	})
-
-	t.Run("json only", func(t *testing.T) {
-		assert.Equal(t, &openapi.RequestBody{
-			Content: map[string]openapi.MediaType{
-				"application/json": {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.jsonOnlyBody"}},
-			},
-		}, newTestOAPI().parseRequestBody(reflect.TypeFor[jsonOnlyBody]()))
 	})
 }
 
@@ -497,7 +504,7 @@ func TestNewResponse(t *testing.T) {
 			Description: "Created",
 			Content: map[string]openapi.MediaType{
 				"application/json": {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.item"}},
-				"application/xml":  {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.itemXML"}},
+				"application/xml":  {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.item"}},
 			},
 		}, got)
 	})
@@ -508,7 +515,7 @@ func TestParseOutType(t *testing.T) {
 
 	problemDetails := map[string]openapi.MediaType{
 		"application/json": {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.ProblemDetails"}},
-		"application/xml":  {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.ProblemDetailsXML"}},
+		"application/xml":  {Schema: openapi.SchemaSimpleOrRef{Ref: "#/components/schemas/aio.ProblemDetails"}},
 	}
 
 	assert.Len(t, got, 3)
@@ -565,7 +572,7 @@ func TestNewOperation(t *testing.T) {
 		deprecated:       true,
 	})
 
-	assert.Equal(t, "POST /items/{id}", got.OperationID)
+	assert.Equal(t, "POST-items-{id}", got.OperationID)
 	assert.Equal(t, "summary", got.Summary)
 	assert.Equal(t, "description", got.Description)
 	assert.Equal(t, []string{"items"}, got.Tags)
@@ -584,8 +591,8 @@ func TestAddEndpoint_SamePathDifferentMethods(t *testing.T) {
 
 	pathItem := o.openAPI.Paths["/items"]
 	if assert.NotNil(t, pathItem.Get) && assert.NotNil(t, pathItem.Post) {
-		assert.Equal(t, "GET /items", pathItem.Get.OperationID)
-		assert.Equal(t, "POST /items", pathItem.Post.OperationID)
+		assert.Equal(t, "GET-items", pathItem.Get.OperationID)
+		assert.Equal(t, "POST-items", pathItem.Post.OperationID)
 	}
 }
 
