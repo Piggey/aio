@@ -1,17 +1,14 @@
 package aio
 
 import (
-	"net/http"
 	"reflect"
 )
 
 type endpoint struct {
 	method      string
 	path        string
-	handler     http.Handler
+	handler     HandlerFunc
 	middlewares []Middleware
-	// preflight runs the same middlewares as handler, but ends with 204 No Content instead of the handler
-	preflight http.Handler
 
 	// openAPI
 	summary          string

@@ -45,15 +45,15 @@ func (app *App) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) 
 
 func problemDetailsFor(err error) ProblemDetails {
 	pd, ok := errors.AsType[ProblemDetails](err)
-	if !ok {
-		return ProblemDetails{
-			Title:  http.StatusText(http.StatusInternalServerError),
-			Status: http.StatusInternalServerError,
-			Detail: err.Error(),
-		}
+	if ok {
+		return pd
 	}
 
-	return pd
+	return ProblemDetails{
+		Title:  http.StatusText(http.StatusInternalServerError),
+		Status: http.StatusInternalServerError,
+		Detail: err.Error(),
+	}
 }
 
 func (app *App) Use(middleware Middleware) {
@@ -147,21 +147,14 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		opt(&ep)
 	}
 
-	handler := app.wrapHandlerFunc(handlerFunc)
-	preflight := HandlerFunc(noContent)
-
+	ep.handler = app.wrapHandlerFunc(handlerFunc)
 	for _, middleware := range ep.middlewares {
-		handler = middleware(handler)
-		preflight = middleware(preflight)
+		ep.handler = middleware(ep.handler)
 	}
 
 	for _, middleware := range middlewares {
-		handler = middleware(handler)
-		preflight = middleware(preflight)
+		ep.handler = middleware(ep.handler)
 	}
-
-	ep.handler = app.intoHTTPHandler(handler)
-	ep.preflight = app.intoHTTPHandler(preflight)
 
 	app.endpoints = append(app.endpoints, ep)
 	slog.Debug("registered endpoint", slog.String("method", method), slog.String("path", path))
@@ -203,7 +196,7 @@ func (app *App) intoMux() *http.ServeMux {
 	endpointsByPath := map[string][]endpoint{}
 	for _, ep := range app.endpoints {
 		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
-		mux.Handle(pattern, ep.handler)
+		mux.Handle(pattern, app.intoHTTPHandler(ep.handler))
 		endpointsByPath[ep.path] = append(endpointsByPath[ep.path], ep)
 
 		if app.oapi.isEnabled {
