@@ -1,5 +1,7 @@
 package aio
 
+import "fmt"
+
 type ProblemDetails struct {
 	Title  string `json:"title" xml:"title"`
 	Status int    `json:"status" xml:"status"`
@@ -7,7 +9,11 @@ type ProblemDetails struct {
 }
 
 func (pd ProblemDetails) Error() string {
-	return pd.Title
+	if pd.Detail == "" {
+		return pd.Title
+	}
+
+	return fmt.Sprintf("%s: %s", pd.Title, pd.Detail)
 }
 
 func Error(status int, title string, err error) ProblemDetails {

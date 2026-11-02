@@ -15,6 +15,7 @@ import (
 type App struct {
 	binder *binder.Binder
 	oapi   oapi
+	debug  bool
 
 	middlewares  []Middleware
 	endpointOpts []endpointOpt
@@ -39,21 +40,25 @@ func New(name string, version string, appOpts ...appOpt) *App {
 }
 
 func (app *App) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	pd := problemDetailsFor(err)
+	pd := problemDetailsFor(err, app.debug)
 	_ = app.binder.BindOut(w, r, pd.Status, pd)
 }
 
-func problemDetailsFor(err error) ProblemDetails {
+func problemDetailsFor(err error, debug bool) ProblemDetails {
 	pd, ok := errors.AsType[ProblemDetails](err)
-	if ok {
-		return pd
+	if !ok {
+		pd = ProblemDetails{
+			Title:  http.StatusText(http.StatusInternalServerError),
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+		}
 	}
 
-	return ProblemDetails{
-		Title:  http.StatusText(http.StatusInternalServerError),
-		Status: http.StatusInternalServerError,
-		Detail: err.Error(),
+	if !debug {
+		pd.Detail = ""
 	}
+
+	return pd
 }
 
 func (app *App) Use(middleware Middleware) {
@@ -148,12 +153,15 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 	}
 
 	ep.handler = app.wrapHandlerFunc(handlerFunc)
+	ep.preflight = noContent
 	for _, middleware := range ep.middlewares {
 		ep.handler = middleware(ep.handler)
+		ep.preflight = middleware(ep.preflight)
 	}
 
 	for _, middleware := range middlewares {
 		ep.handler = middleware(ep.handler)
+		ep.preflight = middleware(ep.preflight)
 	}
 
 	app.endpoints = append(app.endpoints, ep)
@@ -213,7 +221,7 @@ func (app *App) intoMux() *http.ServeMux {
 			continue
 		}
 
-		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), preflightHandler(eps))
+		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), app.preflightHandler(eps))
 	}
 
 	if app.oapi.isEnabled {
