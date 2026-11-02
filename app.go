@@ -137,7 +137,7 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 	if len(missing) > 0 {
 		panic(
 			fmt.Sprintf("aio: %s %s: In type %s has no field with path tag for path params: %s",
-			method, path, inType, strings.Join(missing, ", "),
+				method, path, inType, strings.Join(missing, ", "),
 			),
 		)
 	}
@@ -211,7 +211,9 @@ func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
 
 func (app *App) intoMux() *http.ServeMux {
 	mux := http.NewServeMux()
+	allowByPath := map[string]string{}
 	endpointsByPath := map[string][]endpoint{}
+
 	for _, ep := range app.endpoints {
 		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
 		mux.Handle(pattern, app.intoHTTPHandler(ep.handler))
@@ -224,6 +226,8 @@ func (app *App) intoMux() *http.ServeMux {
 
 	// without it CORS preflight would end with 405 before reaching any middleware
 	for path, eps := range endpointsByPath {
+		allowByPath[path] = allowHeader(eps)
+
 		hasOptions := slices.ContainsFunc(eps, func(ep endpoint) bool {
 			return ep.method == http.MethodOptions
 		})
@@ -237,7 +241,12 @@ func (app *App) intoMux() *http.ServeMux {
 	if app.oapi.isEnabled {
 		mux.Handle(fmt.Sprintf("%s %s", http.MethodGet, app.oapi.schemaPath), app.oapi.schemaHandler())
 		mux.Handle(fmt.Sprintf("%s %s", http.MethodGet, app.oapi.uiPath), app.oapi.uiHandler())
+
+		allowByPath[app.oapi.schemaPath] = http.MethodGet
+		allowByPath[app.oapi.uiPath] = http.MethodGet
 	}
+
+	app.handleFallbacks(mux, allowByPath)
 
 	return mux
 }
