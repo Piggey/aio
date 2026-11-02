@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Piggey/aio/internal/binder"
 )
@@ -120,11 +121,19 @@ func (app *App) Register[In, Out any](method string, path string, handlerFunc fu
 }
 
 func (app *App) Run(addr string) error {
-	return http.ListenAndServe(addr, app.intoMux())
+	start := time.Now()
+	mux := app.intoMux()
+	slog.Debug("generated HTTP ServeMux", slog.Duration("duration", time.Since(start)))
+
+	return http.ListenAndServe(addr, mux)
 }
 
 func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
-	return http.ListenAndServeTLS(addr, certFile, keyFile, app.intoMux())
+	start := time.Now()
+	mux := app.intoMux()
+	slog.Debug("generated HTTP ServeMux", slog.Duration("duration", time.Since(start)))
+
+	return http.ListenAndServeTLS(addr, certFile, keyFile, mux)
 }
 
 func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []Middleware, opts ...endpointOpt) {
