@@ -35,7 +35,7 @@ func Logger(logger *slog.Logger) aio.Middleware {
 			err := next(sr, r)
 			if err != nil {
 				level = slog.LevelError
-				attrs = append(attrs, slog.String("error", err.Error()))
+				attrs = append(attrs, slog.String("err", err.Error()))
 			}
 
 			return err
