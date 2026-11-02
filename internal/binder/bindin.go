@@ -22,24 +22,32 @@ func (b *Binder) BindIn(r *http.Request, obj any) error {
 	if err != nil {
 		return fmt.Errorf("io.ReadAll: %w", err)
 	}
-	if len(data) == 0 {
+	if len(data) != 0 {
+		err := parseBody(r.Header.Get("Content-Type"), data, &obj)
+		if err != nil {
+			return fmt.Errorf("body: %w", err)
+		}
+
 		return nil
-	}
-
-	contentType := r.Header.Get("Content-Type")
-	mimetype, _, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		return fmt.Errorf("mime.ParseMediaType: %w", err)
-	}
-
-	err = bindBody(mimetype, data, obj)
-	if err != nil {
-		return fmt.Errorf("body: %w", err)
 	}
 
 	err = b.validate.StructCtx(r.Context(), obj)
 	if err != nil {
 		return fmt.Errorf("validation: %w", err)
+	}
+
+	return nil
+}
+
+func parseBody(contentType string, data []byte, obj any) error {
+	mimetype, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return fmt.Errorf("parse Content-Type: %w", err)
+	}
+
+	err = bindBody(mimetype, data, obj)
+	if err != nil {
+		return fmt.Errorf("body: %w", err)
 	}
 
 	return nil
