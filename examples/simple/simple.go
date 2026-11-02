@@ -54,7 +54,7 @@ func main() {
 		return TestResponse{
 			Success: true,
 		}, nil
-	})
+	}, aio.WithSecurity("apiKey"))
 
 	kutas := app.Group("/kutas")
 
