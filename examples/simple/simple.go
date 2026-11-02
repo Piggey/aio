@@ -32,6 +32,7 @@ func main() {
 			aio.WithEnumType(MyCustomEnumValues),
 		),
 		aio.WithValidator(validator.New()),
+		aio.WithDebug(true),
 	)
 
 	app.Use(middleware.Recover())
@@ -40,7 +41,7 @@ func main() {
 		AllowedOrigins: []string{"http://localhost:3000"},
 	}))
 
-	app.Get("/test", func(ctx context.Context, _ struct{}) (struct{}, error) {
+	app.Get("/test/{id}", func(ctx context.Context, req TestParamRequest) (struct{}, error) {
 		log.Println("test")
 		return struct{}{}, nil
 	})
@@ -77,6 +78,10 @@ func main() {
 }
 
 type (
+	TestParamRequest struct {
+		Id int `path:"id" validate:"gt=10"`
+	}
+
 	TestRequest struct {
 		Limit        int          `query:"limit"`
 		Offset       int          `query:"offset"`

@@ -14,9 +14,10 @@ func TestProblemDetailsFor(t *testing.T) {
 	conflict := Error(http.StatusConflict, "conflict", errDomain)
 
 	tests := []struct {
-		name string
-		err  error
-		want ProblemDetails
+		name  string
+		err   error
+		debug bool
+		want  ProblemDetails
 	}{
 		{
 			name: "ProblemDetails jest zwracany bez zmian",
@@ -31,18 +32,30 @@ func TestProblemDetailsFor(t *testing.T) {
 		{
 			name: "ProblemDetails w errors.Join jest odnajdywany",
 			err:  errors.Join(errDomain, conflict),
-			want: conflict,
+			want: ProblemDetails{Title: "conflict", Status: http.StatusConflict},
 		},
 		{
 			name: "nieznany blad daje 500",
 			err:  errDomain,
 			want: ProblemDetails{Title: "Internal Server Error", Status: http.StatusInternalServerError},
 		},
+		{
+			name:  "debug zachowuje Detail z ProblemDetails",
+			err:   conflict,
+			debug: true,
+			want:  ProblemDetails{Title: "conflict", Status: http.StatusConflict, Detail: "domain error"},
+		},
+		{
+			name:  "debug wpisuje tresc nieznanego bledu do Detail",
+			err:   errDomain,
+			debug: true,
+			want:  ProblemDetails{Title: "Internal Server Error", Status: http.StatusInternalServerError, Detail: "domain error"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, problemDetailsFor(tt.err))
+			assert.Equal(t, tt.want, problemDetailsFor(tt.err, tt.debug))
 		})
 	}
 }

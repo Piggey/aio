@@ -17,42 +17,24 @@ func Logger(logger *slog.Logger) aio.Middleware {
 
 	return func(next aio.HandlerFunc) aio.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
-			level := slog.LevelInfo
-			start := time.Now()
-			sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-
 			attrs := []slog.Attr{
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 			}
 
-			defer func() {
-				attrs = append(attrs, slog.Duration("duration", time.Since(start)))
-				attrs = append(attrs, slog.Int("status", sr.status))
-				logger.LogAttrs(r.Context(), level, "request", attrs...)
-			}()
+			start := time.Now()
 
-			err := next(sr, r)
+			err := next(w, r)
+			duration := time.Since(start)
+			attrs = append(attrs, slog.Duration("duration", duration))
 			if err != nil {
-				level = slog.LevelError
 				attrs = append(attrs, slog.String("err", err.Error()))
+				logger.LogAttrs(r.Context(), slog.LevelError, "request", attrs...)
+				return err
 			}
 
+			logger.LogAttrs(r.Context(), slog.LevelInfo, "request", attrs...)
 			return err
 		}
 	}
-}
-
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
-func (sr *statusRecorder) WriteHeader(status int) {
-	sr.status = status
-	sr.ResponseWriter.WriteHeader(status)
-}
-
-func (sr *statusRecorder) Unwrap() http.ResponseWriter {
-	return sr.ResponseWriter
 }
