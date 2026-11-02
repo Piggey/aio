@@ -79,7 +79,7 @@ func main() {
 
 type (
 	TestParamRequest struct {
-		Id int `path:"id" validate:"gt=10"`
+		// Id int `path:"id" validate:"gt=10"`
 	}
 
 	TestRequest struct {

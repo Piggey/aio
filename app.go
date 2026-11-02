@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/Piggey/aio/internal/binder"
 )
@@ -130,6 +131,15 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 	inType := reflect.TypeFor[In]()
 	if inType.Kind() != reflect.Struct {
 		panic("aio: In type has to be a struct")
+	}
+
+	missing := checkPathParams(path, inType)
+	if len(missing) > 0 {
+		panic(
+			fmt.Sprintf("aio: %s %s: In type %s has no field with path tag for path params: %s",
+			method, path, inType, strings.Join(missing, ", "),
+			),
+		)
 	}
 
 	outType := reflect.TypeFor[Out]()
