@@ -65,14 +65,15 @@ type (
 	}
 
 	Operation struct {
-		OperationID string           `json:"operationId,omitempty"`
-		Summary     string           `json:"summary,omitempty"`
-		Description string           `json:"description,omitempty"`
-		Tags        []string         `json:"tags,omitempty"`
-		Parameters  []Param          `json:"parameters,omitempty"`
-		RequestBody *RequestBody     `json:"requestBody,omitempty"`
-		Responses   map[int]Response `json:"responses,omitempty"`
-		Deprecated  bool             `json:"deprecated,omitempty"`
+		OperationID string                `json:"operationId,omitempty"`
+		Summary     string                `json:"summary,omitempty"`
+		Description string                `json:"description,omitempty"`
+		Tags        []string              `json:"tags,omitempty"`
+		Parameters  []Param               `json:"parameters,omitempty"`
+		RequestBody *RequestBody          `json:"requestBody,omitempty"`
+		Responses   map[int]Response      `json:"responses,omitempty"`
+		Deprecated  bool                  `json:"deprecated,omitempty"`
+		Security    []map[string][]string `json:"security,omitempty"`
 	}
 
 	Response struct {

@@ -20,4 +20,5 @@ type endpoint struct {
 	outType          reflect.Type
 	errorStatusCodes []int
 	deprecated       bool
+	security         []map[string][]string
 }

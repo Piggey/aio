@@ -28,6 +28,18 @@ func WithTags(tags ...string) endpointOpt {
 	}
 }
 
+// WithSecurity declares in OpenAPI that the endpoint requires the security scheme named name,
+// declared before with one of the With...Security options. scopes are needed only for OAuth2 and OpenID Connect.
+// Every call adds an alternative - the client has to satisfy only one of them.
+func WithSecurity(name string, scopes ...string) endpointOpt {
+	return func(ep *endpoint) {
+		requirement := map[string][]string{
+			name: append([]string{}, scopes...), // scopes are required, serialize as [] instead of null
+		}
+		ep.security = append(ep.security, requirement)
+	}
+}
+
 // WithErrorStatusCodes declares HTTP status codes the endpoint may return an error with.
 // Each of them is described in OpenAPI as a ProblemDetails response.
 func WithErrorStatusCodes(statusCodes ...int) endpointOpt {

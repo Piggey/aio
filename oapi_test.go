@@ -570,9 +570,11 @@ func TestNewOperation(t *testing.T) {
 		outType:          reflect.TypeFor[struct{}](),
 		errorStatusCodes: []int{http.StatusNotFound},
 		deprecated:       true,
+		security:         []map[string][]string{{"bearer": {}}},
 	})
 
 	assert.Equal(t, "POST-items-{id}", got.OperationID)
+	assert.Equal(t, []map[string][]string{{"bearer": {}}}, got.Security)
 	assert.Equal(t, "summary", got.Summary)
 	assert.Equal(t, "description", got.Description)
 	assert.Equal(t, []string{"items"}, got.Tags)
@@ -593,6 +595,75 @@ func TestAddEndpoint_SamePathDifferentMethods(t *testing.T) {
 	if assert.NotNil(t, pathItem.Get) && assert.NotNil(t, pathItem.Post) {
 		assert.Equal(t, "GET-items", pathItem.Get.OperationID)
 		assert.Equal(t, "POST-items", pathItem.Post.OperationID)
+	}
+}
+
+func TestWithSecurity(t *testing.T) {
+	tests := []struct {
+		name string
+		opts []endpointOpt
+		want []map[string][]string
+	}{
+		{
+			name: "schemat bez scope'ow serializowany jako pusta lista",
+			opts: []endpointOpt{WithSecurity("bearer")},
+			want: []map[string][]string{{"bearer": {}}},
+		},
+		{
+			name: "schemat ze scope'ami",
+			opts: []endpointOpt{WithSecurity("oauth2", "read", "write")},
+			want: []map[string][]string{{"oauth2": {"read", "write"}}},
+		},
+		{
+			name: "kazde wywolanie to osobna alternatywa",
+			opts: []endpointOpt{WithSecurity("bearer"), WithSecurity("apiKey")},
+			want: []map[string][]string{{"bearer": {}}, {"apiKey": {}}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ep := endpoint{}
+			for _, opt := range tt.opts {
+				opt(&ep)
+			}
+
+			assert.Equal(t, tt.want, ep.security)
+		})
+	}
+}
+
+func TestUndefinedSecuritySchemes(t *testing.T) {
+	schemes := map[string]openapi.SecurityScheme{
+		"bearer": {Type: openapi.SecuritySchemeTypeHTTP},
+	}
+
+	tests := []struct {
+		name     string
+		security []map[string][]string
+		want     []string
+	}{
+		{
+			name:     "brak wymagan",
+			security: nil,
+			want:     []string{},
+		},
+		{
+			name:     "zadeklarowany schemat",
+			security: []map[string][]string{{"bearer": {}}},
+			want:     []string{},
+		},
+		{
+			name:     "niezadeklarowane schematy posortowane bez duplikatow",
+			security: []map[string][]string{{"oauth2": {}}, {"bearer": {}, "apiKey": {}}, {"oauth2": {"read"}}},
+			want:     []string{"apiKey", "oauth2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, undefinedSecuritySchemes(tt.security, schemes))
+		})
 	}
 }
 

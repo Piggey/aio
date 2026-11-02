@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -95,6 +96,11 @@ func uiPage(title string, schemaPath string) string {
 }
 
 func (o *oapi) addEndpoint(ep endpoint) {
+	undefined := undefinedSecuritySchemes(ep.security, o.openAPI.Components.SecuritySchemes)
+	if len(undefined) > 0 {
+		panic(fmt.Sprintf("aio: %s %s: undefined security schemes: %s", ep.method, ep.path, strings.Join(undefined, ", ")))
+	}
+
 	pathItem := o.openAPI.Paths[ep.path] // other methods may already be registered under the same path
 	setOperation(&pathItem, ep.method, o.newOperation(ep))
 	o.openAPI.Paths[ep.path] = pathItem
@@ -112,7 +118,24 @@ func (o *oapi) newOperation(ep endpoint) openapi.Operation {
 		RequestBody: requestBody,
 		Responses:   o.parseOutType(ep.outType, ep.errorStatusCodes),
 		Deprecated:  ep.deprecated,
+		Security:    ep.security,
 	}
+}
+
+// undefinedSecuritySchemes returns the names used in security requirements that aren't declared in schemes.
+func undefinedSecuritySchemes(security []map[string][]string, schemes map[string]openapi.SecurityScheme) []string {
+	undefined := []string{}
+	for _, requirement := range security {
+		for name := range requirement {
+			_, ok := schemes[name]
+			if !ok && !slices.Contains(undefined, name) {
+				undefined = append(undefined, name)
+			}
+		}
+	}
+
+	slices.Sort(undefined)
+	return undefined
 }
 
 func setOperation(pathItem *openapi.PathItem, method string, operation openapi.Operation) {
