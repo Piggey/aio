@@ -1,10 +1,13 @@
 package aio
 
-type ParameterLocation string
+import "github.com/Piggey/aio/internal/openapi"
+
+// ParameterLocation is the location of a parameter in an HTTP request.
+type ParameterLocation = openapi.ParameterLocation
 
 const (
-	ParameterLocationPath   ParameterLocation = "path"
-	ParameterLocationQuery  ParameterLocation = "query"
-	ParameterLocationHeader ParameterLocation = "header"
-	ParameterLocationCookie ParameterLocation = "cookie"
+	ParameterLocationPath   ParameterLocation = openapi.ParameterLocationPath
+	ParameterLocationQuery  ParameterLocation = openapi.ParameterLocationQuery
+	ParameterLocationHeader ParameterLocation = openapi.ParameterLocationHeader
+	ParameterLocationCookie ParameterLocation = openapi.ParameterLocationCookie
 )

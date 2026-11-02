@@ -1,4 +1,4 @@
-package aio
+package openapi
 
 type DataFormat string
 
@@ -12,4 +12,6 @@ const (
 	DataFormatDate     DataFormat = "date"
 	DataFormatDateTime DataFormat = "date-time"
 	DataFormatPassword DataFormat = "password"
+	DataFormatUUID     DataFormat = "uuid"
+	DataFormatDecimal  DataFormat = "decimal" // fixed point decimal number
 )

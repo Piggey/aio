@@ -1,4 +1,4 @@
-package aio
+package openapi
 
 type DataType string
 
@@ -8,4 +8,5 @@ const (
 	DataTypeString  DataType = "string"
 	DataTypeBoolean DataType = "boolean"
 	DataTypeObject  DataType = "object"
+	DataTypeArray   DataType = "array"
 )
