@@ -86,48 +86,85 @@ func (app *App) Group(path string) *Group {
 	}
 
 	app.groups = append(app.groups, g)
-
 	return &g
 }
 
-func (app *App) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodGet, path, handlerFunc, opts...)
+func (app *App) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodGet, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Put[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodPut, path, handlerFunc, opts...)
+func (app *App) Put[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodPut, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Post[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodPost, path, handlerFunc, opts...)
+func (app *App) Post[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodPost, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Delete[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodDelete, path, handlerFunc, opts...)
+func (app *App) Delete[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodDelete, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Options[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodOptions, path, handlerFunc, opts...)
+func (app *App) Options[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodOptions, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Head[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodHead, path, handlerFunc, opts...)
+func (app *App) Head[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodHead, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Patch[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodPatch, path, handlerFunc, opts...)
+func (app *App) Patch[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodPatch, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Trace[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register(http.MethodTrace, path, handlerFunc, opts...)
+func (app *App) Trace[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register(http.MethodTrace, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.Register("QUERY", path, handlerFunc, opts...)
+func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	app.Register("QUERY", path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.addEndpoint(method, path, handlerFunc, app.middlewares, app.endpointOpts, opts...)
+func (app *App) Register[In, Out any](method string, path string, handler func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	inType, outType, err := parseInOutTypes[In, Out](method, path)
+	if err != nil {
+		panic(err)
+	}
+
+	opts := slices.Concat(app.endpointOpts, endpointOpts)
+
+	app.addEndpoint(method, path, app.wrapHandlerFunc(handler), inType, outType, app.middlewares, opts...)
+}
+
+func parseInOutTypes[In, Out any](method string, path string) (inType reflect.Type, outType reflect.Type, err error) {
+	inType = reflect.TypeFor[In]()
+	if inType.Kind() != reflect.Struct {
+		return inType, outType, fmt.Errorf("aio: In type has to be a struct")
+	}
+
+	missing := checkPathParams(path, inType)
+	if len(missing) > 0 {
+		return inType, outType, fmt.Errorf("aio: %s %s: In type %s has no field with path tag for path params: %s", method, path, inType, strings.Join(missing, ", "))
+	}
+
+	outType = reflect.TypeFor[Out]()
+	if outType.Kind() != reflect.Struct {
+		return inType, outType, fmt.Errorf("aio: Out type has to be a struct")
+	}
+
+	return inType, outType, nil
+}
+
+func (app *App) GetStd(method string, path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(method, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) RegisterStd(method string, path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	emptyType := reflect.TypeFor[Empty]()
+
+	opts := slices.Concat(app.endpointOpts, endpointOpts)
+
+	app.addEndpoint(method, path, handlerFunc, emptyType, emptyType, app.middlewares, opts...)
 }
 
 func (app *App) Run(addr string) error {
@@ -146,48 +183,18 @@ func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
 	return http.ListenAndServeTLS(addr, certFile, keyFile, mux)
 }
 
-func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []Middleware, endpointOpts []endpointOpt, opts ...endpointOpt) {
-	inType := reflect.TypeFor[In]()
-	if inType.Kind() != reflect.Struct {
-		panic("aio: In type has to be a struct")
-	}
-
-	missing := checkPathParams(path, inType)
-	if len(missing) > 0 {
-		panic(
-			fmt.Sprintf("aio: %s %s: In type %s has no field with path tag for path params: %s",
-				method, path, inType, strings.Join(missing, ", "),
-			),
-		)
-	}
-
-	outType := reflect.TypeFor[Out]()
-	if outType.Kind() != reflect.Struct {
-		panic("aio: Out type has to be a struct")
-	}
-
+func (app *App) addEndpoint(method string, path string, handlerFunc HandlerFunc, inType reflect.Type, outType reflect.Type, middlewares []Middleware, endpointOpts ...endpointOpt) {
 	ep := Endpoint{
-		method:  method,
-		path:    path,
-		inType:  inType,
-		outType: outType,
+		method:      method,
+		path:        path,
+		handler:     handlerFunc,
+		middlewares: middlewares,
+		inType:      inType,
+		outType:     outType,
 	}
 
 	for _, opt := range endpointOpts {
 		opt(&ep)
-	}
-
-	for _, opt := range opts {
-		opt(&ep)
-	}
-
-	ep.handler = app.wrapHandlerFunc(handlerFunc)
-	for _, middleware := range ep.middlewares {
-		ep.handler = middleware(ep.handler)
-	}
-
-	for _, middleware := range middlewares {
-		ep.handler = middleware(ep.handler)
 	}
 
 	app.endpoints = append(app.endpoints, ep)
@@ -216,39 +223,35 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 	}
 }
 
-func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := handler(w, r)
-		if err != nil {
-			app.ErrorHandler(w, r, err)
-		}
-	})
-}
-
 func (app *App) intoMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	endpointsByPath := map[string][]Endpoint{}
+	methodsByPath := make(map[string][]string, len(app.endpoints))
 
 	for _, ep := range app.endpoints {
 		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
-		mux.Handle(pattern, app.intoHTTPHandler(ep.handler))
-		endpointsByPath[ep.path] = append(endpointsByPath[ep.path], ep)
+
+		handler := ep.handler
+		for _, mw := range ep.middlewares {
+			handler = mw(handler)
+		}
+
+		mux.Handle(pattern, app.intoHTTPHandler(handler))
+		methodsByPath[ep.path] = append(methodsByPath[ep.path], ep.method)
 
 		if app.oapi.isEnabled {
 			app.oapi.addEndpoint(ep)
 		}
 	}
 
-	// without it CORS preflight would end with 405 before reaching any middleware
-	for path, eps := range endpointsByPath {
-		hasOptions := slices.ContainsFunc(eps, func(ep Endpoint) bool {
-			return ep.method == http.MethodOptions
+	for path, methods := range methodsByPath {
+		hasOptions := slices.ContainsFunc(methods, func(method string) bool {
+			return method == http.MethodOptions
 		})
 		if hasOptions {
 			continue
 		}
 
-		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), preflightHandler(eps))
+		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), preflightHandler(methods))
 	}
 
 	if app.oapi.isEnabled {
@@ -259,12 +262,16 @@ func (app *App) intoMux() *http.ServeMux {
 	return mux
 }
 
-func preflightHandler(eps []Endpoint) http.Handler {
-	methods := make([]string, 0, len(eps))
-	for _, ep := range eps {
-		methods = append(methods, ep.method)
-	}
+func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := handler(w, r)
+		if err != nil {
+			app.ErrorHandler(w, r, err)
+		}
+	})
+}
 
+func preflightHandler(methods []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", strings.Join(methods, ", "))
 		w.WriteHeader(http.StatusNoContent)

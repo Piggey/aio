@@ -40,42 +40,51 @@ func (g *Group) UseEndpointOptions(endpointOpts ...endpointOpt) {
 	g.endpointOpts = append(g.endpointOpts, endpointOpts...)
 }
 
-func (g *Group) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodGet, path, handlerFunc, opts...)
+func (g *Group) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodGet, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Put[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodPut, path, handlerFunc, opts...)
+func (g *Group) Put[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodPut, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Post[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodPost, path, handlerFunc, opts...)
+func (g *Group) Post[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodPost, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Delete[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodDelete, path, handlerFunc, opts...)
+func (g *Group) Delete[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodDelete, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Options[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodOptions, path, handlerFunc, opts...)
+func (g *Group) Options[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodOptions, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Head[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodHead, path, handlerFunc, opts...)
+func (g *Group) Head[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodHead, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Patch[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodPatch, path, handlerFunc, opts...)
+func (g *Group) Patch[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodPatch, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Trace[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register(http.MethodTrace, path, handlerFunc, opts...)
+func (g *Group) Trace[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register(http.MethodTrace, path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Query[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.Register("QUERY", path, handlerFunc, opts...)
+func (g *Group) Query[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	g.Register("QUERY", path, handlerFunc, endpointOpts...)
 }
 
-func (g *Group) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.app.addEndpoint(method, pathpkg.Join(g.path, path), handlerFunc, g.middlewares, g.endpointOpts, opts...)
+func (g *Group) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+	fullpath := pathpkg.Join(g.path, path)
+
+	inType, outType, err := parseInOutTypes[In, Out](method, fullpath)
+	if err != nil {
+		panic(err)
+	}
+
+	opts := slices.Concat(g.endpointOpts, endpointOpts)
+
+	g.app.addEndpoint(method, fullpath, g.app.wrapHandlerFunc(handlerFunc), inType, outType, g.middlewares, opts...)
 }
