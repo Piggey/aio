@@ -37,9 +37,6 @@ func main() {
 
 	app.Use(middleware.Recover())
 	app.Use(middleware.Logger(nil))
-	app.Use(middleware.CORS(middleware.CORSConfig{
-		AllowedOrigins: []string{"http://localhost:3000"},
-	}))
 
 	app.Get("/test/{id}", func(ctx context.Context, req TestParamRequest) (struct{}, error) {
 		log.Println("test")
@@ -67,7 +64,7 @@ func main() {
 		}
 	})
 
-	kutas.Get("/huj", func(ctx context.Context, _ struct{}) (struct{}, error) {
+	kutas.Get("/huj", func(ctx context.Context, _ aio.Empty) (aio.Empty, error) {
 		return struct{}{}, aio.Error(http.StatusBadRequest, "nie podoba mi sie ten request", nil)
 	})
 

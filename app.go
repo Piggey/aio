@@ -14,6 +14,8 @@ import (
 	"github.com/Piggey/aio/internal/binder"
 )
 
+type Empty struct{}
+
 type App struct {
 	binder *binder.Binder
 	oapi   oapi
@@ -172,15 +174,12 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 	}
 
 	ep.handler = app.wrapHandlerFunc(handlerFunc)
-	ep.preflight = noContent
 	for _, middleware := range ep.middlewares {
 		ep.handler = middleware(ep.handler)
-		ep.preflight = middleware(ep.preflight)
 	}
 
 	for _, middleware := range middlewares {
 		ep.handler = middleware(ep.handler)
-		ep.preflight = middleware(ep.preflight)
 	}
 
 	app.endpoints = append(app.endpoints, ep)
@@ -220,7 +219,6 @@ func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
 
 func (app *App) intoMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	allowByPath := map[string]string{}
 	endpointsByPath := map[string][]endpoint{}
 
 	for _, ep := range app.endpoints {
@@ -235,8 +233,6 @@ func (app *App) intoMux() *http.ServeMux {
 
 	// without it CORS preflight would end with 405 before reaching any middleware
 	for path, eps := range endpointsByPath {
-		allowByPath[path] = allowHeader(eps)
-
 		hasOptions := slices.ContainsFunc(eps, func(ep endpoint) bool {
 			return ep.method == http.MethodOptions
 		})
@@ -244,18 +240,25 @@ func (app *App) intoMux() *http.ServeMux {
 			continue
 		}
 
-		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), app.preflightHandler(eps))
+		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), noContentHandler(eps))
 	}
 
 	if app.oapi.isEnabled {
 		mux.Handle(fmt.Sprintf("%s %s", http.MethodGet, app.oapi.schemaPath), app.oapi.schemaHandler())
 		mux.Handle(fmt.Sprintf("%s %s", http.MethodGet, app.oapi.uiPath), app.oapi.uiHandler())
-
-		allowByPath[app.oapi.schemaPath] = http.MethodGet
-		allowByPath[app.oapi.uiPath] = http.MethodGet
 	}
 
-	app.handleFallbacks(mux, allowByPath)
-
 	return mux
+}
+
+func noContentHandler(eps []endpoint) http.Handler {
+	methods := make([]string, 0, len(eps))
+	for _, ep := range eps {
+		methods = append(methods, ep.method)
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", strings.Join(methods, ", "))
+		w.WriteHeader(http.StatusNoContent)
+	})
 }
