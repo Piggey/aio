@@ -8,18 +8,20 @@ import (
 )
 
 type Group struct {
-	app         *App
-	parent      *Group
-	path        string
-	middlewares []Middleware
+	app          *App
+	parent       *Group
+	path         string
+	middlewares  []Middleware
+	endpointOpts []endpointOpt
 }
 
 func (g *Group) Group(path string) *Group {
 	child := Group{
-		app:         g.app,
-		parent:      g,
-		path:        pathpkg.Join(g.path, path),
-		middlewares: slices.Clone(g.middlewares),
+		app:          g.app,
+		parent:       g,
+		path:         pathpkg.Join(g.path, path),
+		middlewares:  slices.Clone(g.middlewares),
+		endpointOpts: slices.Clone(g.endpointOpts),
 	}
 
 	g.app.groups = append(g.app.groups, child)
@@ -27,8 +29,15 @@ func (g *Group) Group(path string) *Group {
 	return &child
 }
 
-func (g *Group) Use(middleware Middleware) {
-	g.middlewares = append(g.middlewares, middleware)
+// UseMiddleware adds middlewares to the endpoints and child groups registered after the call.
+func (g *Group) UseMiddleware(middlewares ...Middleware) {
+	g.middlewares = append(g.middlewares, middlewares...)
+}
+
+// UseEndpointOptions adds endpointOpts to the endpoints and child groups registered after the call.
+// They are applied before the options passed when registering the endpoint.
+func (g *Group) UseEndpointOptions(endpointOpts ...endpointOpt) {
+	g.endpointOpts = append(g.endpointOpts, endpointOpts...)
 }
 
 func (g *Group) Get[In, Out any](path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
@@ -68,5 +77,5 @@ func (g *Group) Query[In, Out any](path string, handlerFunc func(context.Context
 }
 
 func (g *Group) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	g.app.addEndpoint(method, pathpkg.Join(g.path, path), handlerFunc, g.middlewares, opts...)
+	g.app.addEndpoint(method, pathpkg.Join(g.path, path), handlerFunc, g.middlewares, g.endpointOpts, opts...)
 }

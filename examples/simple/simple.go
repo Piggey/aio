@@ -35,8 +35,7 @@ func main() {
 		aio.WithDebug(true),
 	)
 
-	app.Use(middleware.Recover())
-	app.Use(middleware.Logger(nil))
+	app.UseMiddleware(middleware.Recover(), middleware.Logger(nil))
 
 	app.Get("/test/{id}", func(ctx context.Context, req TestParamRequest) (struct{}, error) {
 		log.Println("test")
@@ -55,7 +54,7 @@ func main() {
 
 	kutas := app.Group("/kutas")
 
-	kutas.Use(func(next aio.HandlerFunc) aio.HandlerFunc {
+	kutas.UseMiddleware(func(next aio.HandlerFunc) aio.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) error {
 			log.Println("i sie zesralo")
 			err := next(w, r)

@@ -65,16 +65,24 @@ func problemDetailsFor(err error, debug bool) ProblemDetails {
 	return pd
 }
 
-func (app *App) Use(middleware Middleware) {
-	app.middlewares = append(app.middlewares, middleware)
+// UseMiddleware adds middlewares to the endpoints and groups registered after the call.
+func (app *App) UseMiddleware(middlewares ...Middleware) {
+	app.middlewares = append(app.middlewares, middlewares...)
+}
+
+// UseEndpointOptions adds endpointOpts to the endpoints and groups registered after the call.
+// They are applied before the options passed when registering the endpoint.
+func (app *App) UseEndpointOptions(endpointOpts ...endpointOpt) {
+	app.endpointOpts = append(app.endpointOpts, endpointOpts...)
 }
 
 func (app *App) Group(path string) *Group {
 	g := Group{
-		app:         app,
-		parent:      nil,
-		path:        path,
-		middlewares: slices.Clone(app.middlewares),
+		app:          app,
+		parent:       nil,
+		path:         path,
+		middlewares:  slices.Clone(app.middlewares),
+		endpointOpts: slices.Clone(app.endpointOpts),
 	}
 
 	app.groups = append(app.groups, g)
@@ -119,7 +127,7 @@ func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context
 }
 
 func (app *App) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), opts ...endpointOpt) {
-	app.addEndpoint(method, path, handlerFunc, app.middlewares, opts...)
+	app.addEndpoint(method, path, handlerFunc, app.middlewares, app.endpointOpts, opts...)
 }
 
 func (app *App) Run(addr string) error {
@@ -138,7 +146,7 @@ func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
 	return http.ListenAndServeTLS(addr, certFile, keyFile, mux)
 }
 
-func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []Middleware, opts ...endpointOpt) {
+func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), middlewares []Middleware, endpointOpts []endpointOpt, opts ...endpointOpt) {
 	inType := reflect.TypeFor[In]()
 	if inType.Kind() != reflect.Struct {
 		panic("aio: In type has to be a struct")
@@ -165,7 +173,7 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		outType: outType,
 	}
 
-	for _, opt := range app.endpointOpts {
+	for _, opt := range endpointOpts {
 		opt(&ep)
 	}
 
