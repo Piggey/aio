@@ -526,7 +526,7 @@ func TestParseOutType(t *testing.T) {
 
 // endpoints
 
-func TestSetOperation(t *testing.T) {
+func TestWithOperation(t *testing.T) {
 	op := openapi.Operation{OperationID: "op"}
 
 	tests := []struct {
@@ -552,15 +552,30 @@ func TestSetOperation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.method, func(t *testing.T) {
-			var pathItem openapi.PathItem
-			setOperation(&pathItem, tt.method, op)
+			pathItem := withOperation(openapi.PathItem{}, tt.method, op)
 			assert.Equal(t, &op, tt.get(pathItem))
 		})
 	}
 }
 
+func TestWithOperation_DoesNotModifyInput(t *testing.T) {
+	existing := openapi.Operation{OperationID: "existing"}
+	op := openapi.Operation{OperationID: "op"}
+	pathItem := openapi.PathItem{
+		AdditionalOperations: map[string]openapi.Operation{"LINK": existing},
+	}
+
+	got := withOperation(pathItem, "UNLINK", op)
+	got = withOperation(got, http.MethodGet, op)
+
+	assert.Equal(t, map[string]openapi.Operation{"LINK": existing}, pathItem.AdditionalOperations)
+	assert.Nil(t, pathItem.Get)
+	assert.Equal(t, map[string]openapi.Operation{"LINK": existing, "UNLINK": op}, got.AdditionalOperations)
+	assert.Equal(t, &op, got.Get)
+}
+
 func TestNewOperation(t *testing.T) {
-	got := newTestOAPI().newOperation(endpoint{
+	got := newTestOAPI().newOperation(Endpoint{
 		method:           http.MethodPost,
 		path:             "/items/{id}",
 		summary:          "summary",
@@ -588,8 +603,8 @@ func TestAddEndpoint_SamePathDifferentMethods(t *testing.T) {
 	o := newTestOAPI()
 	empty := reflect.TypeFor[struct{}]()
 
-	o.addEndpoint(endpoint{method: http.MethodGet, path: "/items", inType: empty, outType: empty})
-	o.addEndpoint(endpoint{method: http.MethodPost, path: "/items", inType: empty, outType: empty})
+	o.addEndpoint(Endpoint{method: http.MethodGet, path: "/items", inType: empty, outType: empty})
+	o.addEndpoint(Endpoint{method: http.MethodPost, path: "/items", inType: empty, outType: empty})
 
 	pathItem := o.openAPI.Paths["/items"]
 	if assert.NotNil(t, pathItem.Get) && assert.NotNil(t, pathItem.Post) {
@@ -623,7 +638,7 @@ func TestWithSecurity(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ep := endpoint{}
+			ep := Endpoint{}
 			for _, opt := range tt.opts {
 				opt(&ep)
 			}
@@ -662,7 +677,7 @@ func TestUndefinedSecuritySchemes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, undefinedSecuritySchemes(tt.security, schemes))
+			assert.Equal(t, tt.want, checkSecuritySchemes(tt.security, schemes))
 		})
 	}
 }

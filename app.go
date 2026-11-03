@@ -23,7 +23,7 @@ type App struct {
 
 	middlewares  []Middleware
 	endpointOpts []endpointOpt
-	endpoints    []endpoint
+	endpoints    []Endpoint
 	groups       []Group
 }
 
@@ -166,7 +166,7 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		panic("aio: Out type has to be a struct")
 	}
 
-	ep := endpoint{
+	ep := Endpoint{
 		method:  method,
 		path:    path,
 		inType:  inType,
@@ -181,14 +181,18 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		opt(&ep)
 	}
 
-	ep.handler = app.wrapHandlerFunc(handlerFunc)
+	handler := app.wrapHandlerFunc(handlerFunc)
+	ep.handler = toHTTPHandler(handler)
 	for _, middleware := range ep.middlewares {
 		ep.handler = middleware(ep.handler)
 	}
 
 	for _, middleware := range middlewares {
-		ep.handler = middleware(ep.handler)
+		httpMiddleware := toHTTPMiddleware(middleware)
+		ep.handler = httpMiddleware(ep.handler)
 	}
+
+	ep.handler = app.handleErrors(ep.handler)
 
 	app.endpoints = append(app.endpoints, ep)
 	slog.Debug("registered endpoint", slog.String("method", method), slog.String("path", path))
@@ -216,22 +220,13 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 	}
 }
 
-func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := handler(w, r)
-		if err != nil {
-			app.ErrorHandler(w, r, err)
-		}
-	})
-}
-
 func (app *App) intoMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	endpointsByPath := map[string][]endpoint{}
+	endpointsByPath := map[string][]Endpoint{}
 
 	for _, ep := range app.endpoints {
 		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
-		mux.Handle(pattern, app.intoHTTPHandler(ep.handler))
+		mux.Handle(pattern, ep.handler)
 		endpointsByPath[ep.path] = append(endpointsByPath[ep.path], ep)
 
 		if app.oapi.isEnabled {
@@ -241,7 +236,7 @@ func (app *App) intoMux() *http.ServeMux {
 
 	// without it CORS preflight would end with 405 before reaching any middleware
 	for path, eps := range endpointsByPath {
-		hasOptions := slices.ContainsFunc(eps, func(ep endpoint) bool {
+		hasOptions := slices.ContainsFunc(eps, func(ep Endpoint) bool {
 			return ep.method == http.MethodOptions
 		})
 		if hasOptions {
@@ -259,7 +254,7 @@ func (app *App) intoMux() *http.ServeMux {
 	return mux
 }
 
-func preflightHandler(eps []endpoint) http.Handler {
+func preflightHandler(eps []Endpoint) http.Handler {
 	methods := make([]string, 0, len(eps))
 	for _, ep := range eps {
 		methods = append(methods, ep.method)

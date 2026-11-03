@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"reflect"
@@ -95,18 +96,18 @@ func uiPage(title string, schemaPath string) string {
 </html>`, html.EscapeString(title), schemaPath)
 }
 
-func (o *oapi) addEndpoint(ep endpoint) {
-	undefined := undefinedSecuritySchemes(ep.security, o.openAPI.Components.SecuritySchemes)
+func (o *oapi) addEndpoint(ep Endpoint) {
+	undefined := checkSecuritySchemes(ep.security, o.openAPI.Components.SecuritySchemes)
 	if len(undefined) > 0 {
 		panic(fmt.Sprintf("aio: %s %s: undefined security schemes: %s", ep.method, ep.path, strings.Join(undefined, ", ")))
 	}
 
 	pathItem := o.openAPI.Paths[ep.path] // other methods may already be registered under the same path
-	setOperation(&pathItem, ep.method, o.newOperation(ep))
-	o.openAPI.Paths[ep.path] = pathItem
+	operation := o.newOperation(ep)
+	o.openAPI.Paths[ep.path] = withOperation(pathItem, ep.method, operation)
 }
 
-func (o *oapi) newOperation(ep endpoint) openapi.Operation {
+func (o *oapi) newOperation(ep Endpoint) openapi.Operation {
 	parameters, requestBody := o.parseInType(ep.inType)
 
 	return openapi.Operation{
@@ -122,8 +123,7 @@ func (o *oapi) newOperation(ep endpoint) openapi.Operation {
 	}
 }
 
-// undefinedSecuritySchemes returns the names used in security requirements that aren't declared in schemes.
-func undefinedSecuritySchemes(security []map[string][]string, schemes map[string]openapi.SecurityScheme) []string {
+func checkSecuritySchemes(security []map[string][]string, schemes map[string]openapi.SecurityScheme) []string {
 	undefined := []string{}
 	for _, requirement := range security {
 		for name := range requirement {
@@ -138,7 +138,7 @@ func undefinedSecuritySchemes(security []map[string][]string, schemes map[string
 	return undefined
 }
 
-func setOperation(pathItem *openapi.PathItem, method string, operation openapi.Operation) {
+func withOperation(pathItem openapi.PathItem, method string, operation openapi.Operation) openapi.PathItem {
 	switch method {
 	case http.MethodGet:
 		pathItem.Get = &operation
@@ -159,11 +159,16 @@ func setOperation(pathItem *openapi.PathItem, method string, operation openapi.O
 	case "QUERY":
 		pathItem.Query = &operation
 	default:
-		if pathItem.AdditionalOperations == nil {
-			pathItem.AdditionalOperations = map[string]openapi.Operation{}
+		// the map is shared with the caller's copy, so it has to be cloned before writing
+		additionalOperations := maps.Clone(pathItem.AdditionalOperations)
+		if additionalOperations == nil {
+			additionalOperations = map[string]openapi.Operation{}
 		}
-		pathItem.AdditionalOperations[method] = operation
+		additionalOperations[method] = operation
+		pathItem.AdditionalOperations = additionalOperations
 	}
+
+	return pathItem
 }
 
 func newOperationID(method, path string) string {
