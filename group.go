@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	pathpkg "path"
+	"reflect"
 	"slices"
 )
 
@@ -25,7 +26,6 @@ func (g *Group) Group(path string) *Group {
 	}
 
 	g.app.groups = append(g.app.groups, child)
-
 	return &child
 }
 
@@ -87,4 +87,49 @@ func (g *Group) Register[In, Out any](method string, path string, handlerFunc fu
 	opts := slices.Concat(g.endpointOpts, endpointOpts)
 
 	g.app.addEndpoint(method, fullpath, g.app.wrapHandlerFunc(handlerFunc), inType, outType, g.middlewares, opts...)
+}
+
+func (g *Group) GetStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodGet, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) PutStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodPut, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) PostStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodPost, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) DeleteStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodDelete, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) OptionsStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodOptions, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) HeadStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodHead, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) PatchStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodPatch, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) TraceStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd(http.MethodTrace, path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) QueryStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	g.RegisterStd("QUERY", path, handlerFunc, endpointOpts...)
+}
+
+func (g *Group) RegisterStd(method string, path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	emptyType := reflect.TypeFor[Empty]()
+
+	fullpath := pathpkg.Join(g.path, path)
+	opts := slices.Concat(g.endpointOpts, endpointOpts)
+
+	g.app.addEndpoint(method, fullpath, handlerFunc, emptyType, emptyType, g.middlewares, opts...)
 }

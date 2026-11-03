@@ -125,7 +125,7 @@ func (app *App) Query[In, Out any](path string, handlerFunc func(context.Context
 	app.Register("QUERY", path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) Register[In, Out any](method string, path string, handler func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
+func (app *App) Register[In, Out any](method string, path string, handlerFunc func(context.Context, In) (Out, error), endpointOpts ...endpointOpt) {
 	inType, outType, err := parseInOutTypes[In, Out](method, path)
 	if err != nil {
 		panic(err)
@@ -133,30 +133,43 @@ func (app *App) Register[In, Out any](method string, path string, handler func(c
 
 	opts := slices.Concat(app.endpointOpts, endpointOpts)
 
-	app.addEndpoint(method, path, app.wrapHandlerFunc(handler), inType, outType, app.middlewares, opts...)
+	app.addEndpoint(method, path, app.wrapHandlerFunc(handlerFunc), inType, outType, app.middlewares, opts...)
 }
 
-func parseInOutTypes[In, Out any](method string, path string) (inType reflect.Type, outType reflect.Type, err error) {
-	inType = reflect.TypeFor[In]()
-	if inType.Kind() != reflect.Struct {
-		return inType, outType, fmt.Errorf("aio: In type has to be a struct")
-	}
-
-	missing := checkPathParams(path, inType)
-	if len(missing) > 0 {
-		return inType, outType, fmt.Errorf("aio: %s %s: In type %s has no field with path tag for path params: %s", method, path, inType, strings.Join(missing, ", "))
-	}
-
-	outType = reflect.TypeFor[Out]()
-	if outType.Kind() != reflect.Struct {
-		return inType, outType, fmt.Errorf("aio: Out type has to be a struct")
-	}
-
-	return inType, outType, nil
+func (app *App) GetStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodGet, path, handlerFunc, endpointOpts...)
 }
 
-func (app *App) GetStd(method string, path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
-	app.RegisterStd(method, path, handlerFunc, endpointOpts...)
+func (app *App) PutStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodPut, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) PostStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodPost, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) DeleteStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodDelete, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) OptionsStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodOptions, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) HeadStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodHead, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) PatchStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodPatch, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) TraceStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd(http.MethodTrace, path, handlerFunc, endpointOpts...)
+}
+
+func (app *App) QueryStd(path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
+	app.RegisterStd("QUERY", path, handlerFunc, endpointOpts...)
 }
 
 func (app *App) RegisterStd(method string, path string, handlerFunc HandlerFunc, endpointOpts ...endpointOpt) {
@@ -269,6 +282,25 @@ func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
 			app.ErrorHandler(w, r, err)
 		}
 	})
+}
+
+func parseInOutTypes[In, Out any](method string, path string) (inType reflect.Type, outType reflect.Type, err error) {
+	inType = reflect.TypeFor[In]()
+	if inType.Kind() != reflect.Struct {
+		return inType, outType, fmt.Errorf("aio: In type has to be a struct")
+	}
+
+	missing := checkPathParams(path, inType)
+	if len(missing) > 0 {
+		return inType, outType, fmt.Errorf("aio: %s %s: In type %s has no field with path tag for path params: %s", method, path, inType, strings.Join(missing, ", "))
+	}
+
+	outType = reflect.TypeFor[Out]()
+	if outType.Kind() != reflect.Struct {
+		return inType, outType, fmt.Errorf("aio: Out type has to be a struct")
+	}
+
+	return inType, outType, nil
 }
 
 func preflightHandler(methods []string) http.Handler {
