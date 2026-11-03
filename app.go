@@ -181,18 +181,14 @@ func (app *App) addEndpoint[In, Out any](method string, path string, handlerFunc
 		opt(&ep)
 	}
 
-	handler := app.wrapHandlerFunc(handlerFunc)
-	ep.handler = toHTTPHandler(handler)
+	ep.handler = app.wrapHandlerFunc(handlerFunc)
 	for _, middleware := range ep.middlewares {
 		ep.handler = middleware(ep.handler)
 	}
 
 	for _, middleware := range middlewares {
-		httpMiddleware := toHTTPMiddleware(middleware)
-		ep.handler = httpMiddleware(ep.handler)
+		ep.handler = middleware(ep.handler)
 	}
-
-	ep.handler = app.handleErrors(ep.handler)
 
 	app.endpoints = append(app.endpoints, ep)
 	slog.Debug("registered endpoint", slog.String("method", method), slog.String("path", path))
@@ -220,13 +216,22 @@ func (app *App) wrapHandlerFunc[In, Out any](handlerFunc func(context.Context, I
 	}
 }
 
+func (app *App) intoHTTPHandler(handler HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := handler(w, r)
+		if err != nil {
+			app.ErrorHandler(w, r, err)
+		}
+	})
+}
+
 func (app *App) intoMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	endpointsByPath := map[string][]Endpoint{}
 
 	for _, ep := range app.endpoints {
 		pattern := fmt.Sprintf("%s %s", ep.method, ep.path)
-		mux.Handle(pattern, ep.handler)
+		mux.Handle(pattern, app.intoHTTPHandler(ep.handler))
 		endpointsByPath[ep.path] = append(endpointsByPath[ep.path], ep)
 
 		if app.oapi.isEnabled {

@@ -6,9 +6,7 @@ type endpointOpt func(ep *Endpoint)
 // They run after the App and Group middlewares, right before the handler.
 func WithMiddlewares(middlewares ...Middleware) endpointOpt {
 	return func(ep *Endpoint) {
-		for _, middleware := range middlewares {
-			ep.middlewares = append(ep.middlewares, toHTTPMiddleware(middleware))
-		}
+		ep.middlewares = append(ep.middlewares, middlewares...)
 	}
 }
 

@@ -1,15 +1,14 @@
 package aio
 
 import (
-	"net/http"
 	"reflect"
 )
 
 type Endpoint struct {
 	method      string
 	path        string
-	handler     http.Handler
-	middlewares []func(next http.Handler) http.Handler
+	handler     HandlerFunc
+	middlewares []Middleware
 
 	// openAPI
 	summary          string
