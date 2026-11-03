@@ -240,7 +240,7 @@ func (app *App) intoMux() *http.ServeMux {
 			continue
 		}
 
-		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), noContentHandler(eps))
+		mux.Handle(fmt.Sprintf("%s %s", http.MethodOptions, path), preflightHandler(eps))
 	}
 
 	if app.oapi.isEnabled {
@@ -251,7 +251,7 @@ func (app *App) intoMux() *http.ServeMux {
 	return mux
 }
 
-func noContentHandler(eps []endpoint) http.Handler {
+func preflightHandler(eps []endpoint) http.Handler {
 	methods := make([]string, 0, len(eps))
 	for _, ep := range eps {
 		methods = append(methods, ep.method)
