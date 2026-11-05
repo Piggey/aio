@@ -185,6 +185,7 @@ func (app *App) Run(addr string) error {
 	mux := app.intoMux()
 	slog.Debug("generated HTTP ServeMux", slog.Duration("duration", time.Since(start)))
 
+	slog.Debug("started listening", slog.String("addr", addr))
 	return http.ListenAndServe(addr, mux)
 }
 
@@ -193,6 +194,7 @@ func (app *App) RunTLS(addr string, certFile string, keyFile string) error {
 	mux := app.intoMux()
 	slog.Debug("generated HTTP ServeMux", slog.Duration("duration", time.Since(start)))
 
+	slog.Debug("started listening", slog.String("addr", addr))
 	return http.ListenAndServeTLS(addr, certFile, keyFile, mux)
 }
 
